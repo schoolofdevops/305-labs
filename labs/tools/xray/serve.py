@@ -15,6 +15,7 @@ import urllib.request
 
 PORT = int(os.environ.get("PORT", "8010"))
 OLLAMA = os.environ.get("OLLAMA_HOST_URL", "http://127.0.0.1:11434").rstrip("/")
+LLAMACPP = os.environ.get("LLAMACPP_URL", "http://127.0.0.1:8080").rstrip("/")
 DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -26,19 +27,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         pass
 
     def do_GET(self):
-        if self.path.startswith("/ollama/"):
+        if self.path.startswith("/ollama/") or self.path.startswith("/llamacpp/"):
             self._proxy("GET")
         else:
             super().do_GET()
 
     def do_POST(self):
-        if self.path.startswith("/ollama/"):
+        if self.path.startswith("/ollama/") or self.path.startswith("/llamacpp/"):
             self._proxy("POST")
         else:
             self.send_error(405)
 
     def _proxy(self, method):
-        url = OLLAMA + self.path[len("/ollama"):]
+        if self.path.startswith("/llamacpp/"):
+            url = LLAMACPP + self.path[len("/llamacpp"):]
+        else:
+            url = OLLAMA + self.path[len("/ollama"):]
         body = None
         if method == "POST":
             length = int(self.headers.get("Content-Length", 0) or 0)

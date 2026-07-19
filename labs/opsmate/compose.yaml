@@ -1,0 +1,49 @@
+# ============================================================================
+# OpsMate — the course spine stack.
+#
+# This file GROWS module by module, service by service, from here (M3) to M13.
+# It starts as a single serving engine and matures into the full OpsMate stack:
+#   M3  model            — the serving engine (llama-server), this file's first service
+#   M4  + retriever/db    — RAG over the runbooks
+#   M5  + eval harness
+#   ... through M7, then the Compose phase is retired for Kubernetes (M8+).
+#
+# Rule for the whole course: one service is added or grown per module, and the
+# service you already understand never silently changes shape underneath you.
+# Hand-author it — do not generate it — so every line is one you can defend.
+#
+# Apple Silicon note: containers cannot reach the Mac's Metal GPU, so this
+# engine runs CPU inference inside the container. That is deliberate: the
+# containerized CPU path is identical on your Mac, on Linux, and on WSL2, which
+# is what makes the stack portable. (The lesson explains the pattern.)
+# ============================================================================
+
+services:
+  # --- M3: the serving engine ------------------------------------------------
+  # llama-server (llama.cpp) serving the Qwen3-0.6B GGUF over an OpenAI-compatible
+  # API on :8080. Official multi-arch image — the same tag runs on arm64 and amd64.
+  model:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: opsmate-model
+    command: >
+      -m /models/qwen3-0.6b-q8_0.gguf
+      --host 0.0.0.0
+      --port 8080
+      -c 2048
+      --metrics
+      --alias qwen3-0.6b
+    ports:
+      - "8080:8080"
+    volumes:
+      # Plain model directory, not an HF symlink cache — a symlink farm does not
+      # survive some container file-mount layers (see the deep dive). GGUF lives here.
+      - ./models/gguf:/models:ro
+    mem_limit: 2g
+    healthcheck:
+      # llama-server exposes /health; it reports ok once the model is loaded.
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped

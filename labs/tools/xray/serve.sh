@@ -8,17 +8,26 @@ set -euo pipefail
 PORT="${PORT:-8010}"
 XRAY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OLLAMA_URL="${OLLAMA_HOST_URL:-http://127.0.0.1:11434}"
+LLAMACPP="${LLAMACPP_URL:-http://127.0.0.1:8080}"
 OLLAMA_UP="$(curl -s --max-time 2 "${OLLAMA_URL}/api/version" 2>/dev/null || echo '')"
+LLAMA_UP="$(curl -s --max-time 2 "${LLAMACPP}/health" 2>/dev/null || echo '')"
 
 echo "┌─────────────────────────────────────────────────────────────"
-echo "│  LLM Stack X-Ray · Tokens lens (M1) — more lenses land per module"
+echo "│  LLM Stack X-Ray · Tokens (M1) · Engine (M3) — more lenses land per module"
 echo "│"
-echo "│  ollama  : ${OLLAMA_URL}"
+echo "│  ollama       : ${OLLAMA_URL}"
 if [ -n "${OLLAMA_UP}" ]; then
-  echo "│            reachable ✓ ${OLLAMA_UP}"
+  echo "│                 reachable ✓ ${OLLAMA_UP}"
 else
-  echo "│            NOT reachable — start Ollama first ('ollama serve'"
-  echo "│            or the desktop app), then reload the page"
+  echo "│                 NOT reachable — start Ollama first ('ollama serve'"
+  echo "│                 or the desktop app), then reload the page"
+fi
+echo "│  llama-server : ${LLAMACPP}  (Engine lens)"
+if [ -n "${LLAMA_UP}" ]; then
+  echo "│                 reachable ✓ ${LLAMA_UP}"
+else
+  echo "│                 not up — Engine lens shows how to start it"
+  echo "│                 (make -C labs/opsmate up)"
 fi
 echo "│"
 echo "│  open    : http://127.0.0.1:${PORT}/"

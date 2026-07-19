@@ -6,7 +6,7 @@ no fake numbers — and grows one lens per module.
 | Lens | Module | What it shows |
 | --- | --- | --- |
 | **Tokens** | M1 | A request split into prefill and decode on your real model: live token stream, TTFT (client and server view), TPOT, tok/s, phase-split bar, context-window usage |
-| Engine | M3 | _lands with M3_ |
+| **Engine** | M3 | Your real llama-server's `/metrics`, polled live: requests processing/deferred (watch queueing appear under load), lifetime token counters with rates, decode tok/s trend chart, engine log |
 | RAG | M4 | _lands with M4_ |
 | Evals | M5 | _lands with M5_ |
 | Train | M6 | _lands with M6_ |
@@ -39,6 +39,7 @@ again in the K8s phase of the course. If a tool ever asks you to paste a secret 
 web page, ask why it didn't do this instead.
 
 Ollama listening elsewhere? `OLLAMA_HOST_URL=http://other-host:11434 bash serve.sh`.
+llama-server elsewhere (Engine lens)? `LLAMACPP_URL=http://other-host:8080 bash serve.sh`.
 
 ## Connection budget (a design note worth stealing)
 

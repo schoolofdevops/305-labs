@@ -160,8 +160,9 @@ async function main() {
   ok('loads: no console errors', consoleErrors.length === 0, consoleErrors.join(' | '));
   ok('loads: no page exceptions', pageErrors.length === 0, pageErrors.join(' | '));
   ok('loads: zero non-same-origin requests', externalReqs.length === 0, externalReqs.join(' | '));
-  ok('lens tabs: 1 active + 8 stubs', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
-      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 8);
+  ok('lens tabs: 1 active + 2 live lenses + 7 stubs', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
+      && await ev('document.querySelectorAll("#tabs .tab[data-lens]").length') === 2
+      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 7);
 
   // ---------- 2. real connection state ----------
   await waitFor('document.getElementById("connInd").className === "connected"', 12000, 'conn: indicator connected');
@@ -205,6 +206,26 @@ async function main() {
     90000, 'thinking run: completes');
   ok('thinking run: italic thinking text rendered', (await ev('document.querySelectorAll("#streamOut .think").length')) > 0);
   ok('thinking run: one-word answer cost many tokens', parseInt(await gauge('oTok'), 10) > 30, await gauge('oTok'));
+
+  // ---------- 6. Engine lens (M3) — live vs real llama-server ----------
+  await ev('document.querySelector("#tabs .tab[data-lens=engine]").click()');
+  ok('engine: lens switches (body class + panel visible)',
+    (await ev('document.body.classList.contains("lens-engine")')) === true
+    && (await ev('getComputedStyle(document.getElementById("engMain")).display')) === 'grid');
+  ok('engine: tokens main hidden', (await ev('getComputedStyle(document.getElementById("main")).display')) === 'none');
+  await waitFor('document.getElementById("egPT").textContent !== "—"', 10000, 'engine: metrics populate');
+  ok('engine: offline banner hidden with server up', !(await ev('document.getElementById("engOffline").classList.contains("show")')));
+  const pt0 = parseInt(await gauge('egPT'), 10);
+  ok('engine: prompt-token counter is a number', Number.isFinite(pt0), await gauge('egPT'));
+  // drive one real request THROUGH the page's own origin and watch counters move
+  await ev(`fetch('/llamacpp/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'qwen3-0.6b',messages:[{role:'user',content:'Reply with one word: hello /no_think'}],max_tokens:20})})`);
+  await waitFor(`parseInt(document.getElementById("egPT").textContent,10) > ${pt0}`, 20000, 'engine: counters advance after a real request');
+  ok('engine: decode-rate gauge shows tok/s', /tok\/s/.test(await gauge('egRate')), await gauge('egRate'));
+  ok('engine: engine log has entries', (await ev('document.querySelectorAll("#engEvList .ev").length')) >= 1);
+  ok('engine: chart polyline rendered', (await ev('document.querySelectorAll("#engChart polyline").length')) >= 1);
+  // switch back for the screenshot
+  await ev('document.querySelector("#tabs .tab[data-lens=tokens]").click()');
+  ok('engine: switch back to Tokens works', (await ev('document.body.className')) === '');
 
   // ---------- screenshot for the evidence file ----------
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });

@@ -126,6 +126,25 @@
   footer{flex:0 0 auto;font-size:.72rem;color:var(--faint);font-family:var(--mono);
     display:flex;gap:14px;flex-wrap:wrap}
   footer b{color:var(--dim);font-weight:600}
+
+  /* ---------- engine lens (M3) ---------- */
+  body.lens-engine #main,body.lens-engine #bar{display:none}
+  #engMain{display:none;flex:1 1 auto;min-height:0;grid-template-columns:clamp(250px,23rem,370px) 1fr;gap:6px}
+  body.lens-engine #engMain{display:grid}
+  #engLeft{display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto;scrollbar-width:thin}
+  #engOffline{display:none;border:1px dashed rgba(245,185,66,.5);border-radius:9px;padding:10px 12px;
+    color:var(--warn);font-size:.9rem;line-height:1.5;background:rgba(245,185,66,.06)}
+  #engOffline.show{display:block}
+  #engOffline code{font-family:var(--mono);font-size:.84rem;color:var(--txt);background:rgba(255,255,255,.06);padding:0 4px;border-radius:4px}
+  .rateChip{font-family:var(--mono);font-size:.7rem;color:var(--accent);margin-left:6px}
+  #slotBar{height:1.1rem;border-radius:6px;overflow:hidden;display:flex;border:1px solid var(--line);margin:4px 0 2px;background:#0e1526}
+  #slotBusy{background:linear-gradient(90deg,#f5b942,#e09f1f);min-width:0;transition:width .5s}
+  #slotNote{font-family:var(--mono);font-size:.7rem;color:var(--faint)}
+  #engRight{display:flex;flex-direction:column;gap:6px;min-height:0}
+  #engChartPanel{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+  #engChart{flex:1;min-height:0;width:100%}
+  #engEvents{flex:0 0 clamp(100px,8.5rem,150px);display:flex;flex-direction:column;min-height:0}
+  #engEvList{flex:1;overflow-y:auto;font-family:var(--mono);font-size:.8rem;line-height:1.7;scrollbar-width:thin}
 </style>
 </head>
 <body>
@@ -134,7 +153,7 @@
     <h1>LLM <span class="llm">Stack X-Ray</span> · <span class="lens" id="lensName">Tokens lens</span></h1>
     <div id="tabs">
       <button class="tab active" data-lens="tokens">Tokens</button>
-      <button class="tab stub" title="lands with M3">Engine<small>M3</small></button>
+      <button class="tab" data-lens="engine">Engine</button>
       <button class="tab stub" title="lands with M4">RAG<small>M4</small></button>
       <button class="tab stub" title="lands with M5">Evals<small>M5</small></button>
       <button class="tab stub" title="lands with M6">Train<small>M6</small></button>
@@ -216,8 +235,48 @@
     </div>
   </div>
 
+  <div id="engMain">
+    <div id="engLeft">
+      <div id="engOffline">
+        llama-server is not reachable through the proxy. Bring the OpsMate stack up
+        (<code>make -C labs/opsmate up</code>) — the Engine lens reads its real
+        <code>/metrics</code>. Set <code>LLAMACPP_URL</code> if it listens elsewhere.
+      </div>
+      <div class="panel">
+        <h2>Requests — right now</h2>
+        <div class="row"><span class="lbl">processing</span><span><span class="val hot" id="egProc">—</span></span></div>
+        <div class="row"><span class="lbl">deferred (queued)</span><span><span class="val" id="egDef">—</span></span></div>
+      </div>
+      <div class="panel">
+        <h2>Slots</h2>
+        <div id="slotBar"><div id="slotBusy" style="width:0%"></div></div>
+        <div id="slotNote">— busy / — idle</div>
+      </div>
+      <div class="panel">
+        <h2>Token counters — lifetime</h2>
+        <div class="row"><span class="lbl">prompt tokens</span><span><span class="val" id="egPT">—</span><span class="rateChip" id="egPTr"></span></span></div>
+        <div class="row"><span class="lbl">predicted tokens</span><span><span class="val" id="egGT">—</span><span class="rateChip" id="egGTr"></span></span></div>
+      </div>
+      <div class="panel">
+        <h2>Throughput (from counters)</h2>
+        <div class="row"><span class="lbl">decode rate</span><span><span class="val hot" id="egRate">—</span></span></div>
+        <div class="row"><span class="lbl">prompt rate</span><span><span class="val" id="egPRate">—</span></span></div>
+      </div>
+    </div>
+    <div id="engRight">
+      <div class="panel" id="engChartPanel">
+        <h2>Predicted tokens/s — last 2 minutes</h2>
+        <svg id="engChart" viewBox="0 0 600 200" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="panel" id="engEvents">
+        <h2>Engine log</h2>
+        <div id="engEvList"><span id="engEvEmpty">polling /llamacpp/metrics every 2 s…</span></div>
+      </div>
+    </div>
+  </div>
+
   <footer>
-    <span><b>reading:</b> your real Ollama via same-origin proxy <code>/ollama/*</code></span>
+    <span><b>reading:</b> your real Ollama via <code>/ollama/*</code> · your real llama-server via <code>/llamacpp/*</code> (same-origin proxy)</span>
     <span><b>TTFT</b> time to first token · <b>TPOT</b> time per output token</span>
     <span><b>honest note:</b> server timings come from Ollama's own response metrics; client TTFT includes network+proxy (~ms on localhost)</span>
   </footer>
@@ -399,6 +458,98 @@
   });
 
   /* ---------- presets: the two contrasting experiments from the lab ---------- */
+  /* ---------- lens switching (M3+) ---------- */
+  document.querySelectorAll('#tabs .tab[data-lens]').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    const lens = t.dataset.lens;
+    document.body.className = lens === 'tokens' ? '' : 'lens-' + lens;
+    $("lensName").textContent = lens === 'tokens' ? 'Tokens lens' : 'Engine lens';
+  }));
+
+  /* ---------- Engine lens (M3): poll llama-server /metrics ---------- */
+  const engHist = [];   // [t, predictedTotal]
+  let engPrev = null, engMiss = 0, engEvCount = 0;
+  function engLog(kind, msg, cls) {
+    const list = $("engEvList"); const empty = $("engEvEmpty");
+    if (empty) empty.remove();
+    const t = new Date().toTimeString().slice(0, 8);
+    const div = document.createElement("div");
+    div.className = "ev new" + (cls ? " " + cls : "");
+    div.innerHTML = `<span class="et">${t}</span><span class="er">${kind}</span><span class="em"></span>`;
+    div.querySelector(".em").textContent = msg;
+    list.prepend(div);
+    if (++engEvCount > 40) list.lastElementChild?.remove();
+  }
+  function parseProm(text) {
+    const out = {};
+    for (const line of text.split("\n")) {
+      if (!line || line[0] === "#") continue;
+      const sp = line.lastIndexOf(" ");
+      if (sp > 0) out[line.slice(0, sp).replace(/\{.*\}/, "")] = parseFloat(line.slice(sp + 1));
+    }
+    return out;
+  }
+  function drawChart() {
+    const svg = $("engChart");
+    const now = Date.now();
+    while (engHist.length && now - engHist[0][0] > 120000) engHist.shift();
+    if (engHist.length < 2) { svg.innerHTML = ""; return; }
+    const rates = [];
+    for (let i = 1; i < engHist.length; i++) {
+      const dt = (engHist[i][0] - engHist[i-1][0]) / 1000;
+      rates.push([engHist[i][0], dt > 0 ? Math.max(0, (engHist[i][1] - engHist[i-1][1]) / dt) : 0]);
+    }
+    const max = Math.max(5, ...rates.map(r => r[1]));
+    const pts = rates.map(([t, v]) =>
+      `${(600 - (now - t) / 120000 * 600).toFixed(1)},${(195 - v / max * 185).toFixed(1)}`).join(" ");
+    svg.innerHTML =
+      `<line x1="0" y1="195" x2="600" y2="195" stroke="#26324e" stroke-width="1"/>` +
+      `<text x="4" y="14" fill="#5a6a8c" font-size="11" font-family="monospace">${max.toFixed(0)} tok/s</text>` +
+      `<polyline points="${pts}" fill="none" stroke="#4cc9f0" stroke-width="2"/>`;
+  }
+  async function engPoll() {
+    if (!document.body.classList.contains("lens-engine")) return;
+    try {
+      const text = await (await fetch("/llamacpp/metrics")).text();
+      if (text.trim().startsWith("{")) throw new Error(JSON.parse(text).error || "bad response");
+      const m = parseProm(text);
+      $("engOffline").classList.remove("show");
+      const proc = m["llamacpp:requests_processing"] ?? 0, def = m["llamacpp:requests_deferred"] ?? 0;
+      setVal("egProc", String(proc)); setVal("egDef", String(def));
+      const pt = m["llamacpp:prompt_tokens_total"] ?? 0, gt = m["llamacpp:tokens_predicted_total"] ?? 0;
+      setVal("egPT", String(pt)); setVal("egGT", String(gt));
+      const now = Date.now();
+      engHist.push([now, gt]);
+      if (engPrev) {
+        const dt = (now - engPrev.t) / 1000;
+        const gr = Math.max(0, (gt - engPrev.gt) / dt), pr = Math.max(0, (pt - engPrev.pt) / dt);
+        $("egRate").textContent = gr.toFixed(1) + " tok/s";
+        $("egPRate").textContent = pr.toFixed(1) + " tok/s";
+        $("egPTr").textContent = pr > 0.1 ? "+" + pr.toFixed(0) + "/s" : "";
+        $("egGTr").textContent = gr > 0.1 ? "+" + gr.toFixed(0) + "/s" : "";
+        if (proc > 0 && (!engPrev.proc)) engLog("busy", `${proc} processing, ${def} queued`);
+        if (def > 0 && !engPrev.def) engLog("queueing", `${def} request(s) deferred — slots full`, "warn");
+        if (proc === 0 && engPrev.proc > 0) engLog("drained", "all requests finished");
+        if (gt > engPrev.gt) engLog("generated", `+${gt - engPrev.gt} tokens (${gr.toFixed(1)} tok/s) · prompt +${pt - engPrev.pt}`);
+      }
+      // slots: derive busy share from decode activity when slot metrics absent
+      const busyPct = proc > 0 ? Math.min(100, proc * 25) : 0;
+      $("slotBusy").style.width = busyPct + "%";
+      $("slotNote").textContent = proc > 0 ? `${proc} request(s) in slots` : "idle";
+      engPrev = { t: now, pt, gt, proc, def };
+      drawChart();
+      engMiss = 0;
+    } catch (e) {
+      if (++engMiss >= 2) {
+        $("engOffline").classList.add("show");
+        ["egProc","egDef","egPT","egGT","egRate","egPRate"].forEach(id => $(id).textContent = "—");
+        engPrev = null;
+      }
+    }
+  }
+  setInterval(engPoll, 2000);
+
   const RUNBOOK = "You are reading an operations runbook. Service: payments-api. On elevated 5xx: check the upstream database connection pool first; a saturated pool shows as rising p99 latency before errors. Restart is a last resort — drain traffic at the load balancer, verify health checks pass, then re-admit. Capacity notes: each replica handles roughly two hundred concurrent requests; autoscaling adds a replica when queue depth stays above fifty for one minute. Deployment history: the last three incidents were caused by config changes, not code. Postmortem actions: add a canary stage, alert on pool saturation, document the drain procedure. ".repeat(4);
   $("presetPf").addEventListener("click", () => {
     $("prompt").value = RUNBOOK + "\n\nAnswer in exactly one word: what should you check first on elevated 5xx?";
