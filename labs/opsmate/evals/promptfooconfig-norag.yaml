@@ -1,0 +1,56 @@
+# ============================================================================
+# OpsMate NO-RAG baseline — the control arm of the baseline moment.
+#
+# Same golden questions, same judge, same asserts as promptfooconfig.yaml — but
+# the model answers with NO retrieval. This hits the M3 llama-server /v1 endpoint
+# DIRECTLY with only a system persona, so the model must answer from what it was
+# trained on, with none of your runbooks in front of it. The gap between this and
+# the RAG run is the measured value of retrieval — the whole point of M4/M5.
+#
+# Expectation, honestly framed: on the generation layer this arm scores LOW, because
+# a 0.6B model has never read Meridian Retail's runbooks — it will give plausible,
+# generic SRE advice that misses the runbook-specific detail (the db_pool_in_use
+# gauge, the DLQ, pg_is_in_recovery). On the HONESTY layer it often scores WORSE
+# still: with no context to ground it, the base model happily invents an answer to
+# an unanswerable question instead of admitting the gap. That contrast is the lesson.
+#
+# Run (from labs repo root):
+#     npx -y promptfoo@latest eval -c labs/opsmate/evals/promptfooconfig-norag.yaml \
+#         -o labs/opsmate/evals/generation-norag-latest.json
+#
+# Requires the compose `model` service up (llama-server on :8080) and host Ollama
+# for the judge. It does NOT need the app — this arm bypasses RAG on purpose.
+# ============================================================================
+
+description: "OpsMate NO-RAG baseline (base model, direct /v1, local judge)"
+
+# The base model answers the question with only a persona — no retrieved context.
+prompts:
+  - |
+    You are OpsMate, an SRE assistant. Answer the on-call engineer's question.
+    If you do not actually know the answer, say you do not have a runbook for it
+    rather than inventing steps.
+
+    QUESTION: {{query}}
+
+# Point straight at the M3 llama-server's OpenAI-compatible endpoint. No app, no
+# retrieval — the control arm. MODEL_URL defaults to the compose-published :8080.
+providers:
+  - id: "openai:chat:qwen3-0.6b"
+    label: "opsmate-norag-base"
+    config:
+      apiBaseUrl: "{{ env.MODEL_URL | default('http://localhost:8080') }}/v1"
+      apiKey: "not-needed"
+      temperature: 0
+
+defaultTest:
+  options:
+    provider:
+      id: "ollama:chat:qwen3:0.6b"
+      config:
+        temperature: 0
+        think: false
+
+# The SAME generation + honesty tests as the RAG run — identical yardstick, only
+# the retrieval is removed. Regenerate from golden.yaml with make_promptfoo_tests.py.
+tests: file://generation-tests.yaml

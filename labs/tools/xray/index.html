@@ -163,6 +163,33 @@
   .chunkCard.fed .fedTag{display:inline}
   #ragEmpty{color:var(--faint);font-size:.84rem;font-family:var(--mono)}
 
+  /* ---------- evals lens (M5) ---------- */
+  body.lens-evals #main,body.lens-evals #bar,body.lens-evals #engMain,body.lens-evals #ragMain{display:none}
+  #evMain{display:none;flex:1 1 auto;min-height:0;grid-template-columns:clamp(250px,24rem,380px) 1fr;gap:6px}
+  body.lens-evals #evMain{display:grid}
+  #evLeft{display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto;scrollbar-width:thin}
+  #evOffline{display:none;border:1px dashed rgba(245,185,66,.5);border-radius:9px;padding:10px 12px;
+    color:var(--warn);font-size:.9rem;line-height:1.5;background:rgba(245,185,66,.06)}
+  #evOffline.show{display:block}
+  #evOffline code{font-family:var(--mono);font-size:.84rem;color:var(--txt);background:rgba(255,255,255,.06);padding:0 4px;border-radius:4px}
+  .armBar{height:1.05rem;border-radius:6px;overflow:hidden;background:#0e1526;border:1px solid var(--line);margin:3px 0}
+  .armFill{height:100%;transition:width .6s;background:linear-gradient(90deg,#2e9ec4,#4cc9f0)}
+  .armFill.norag{background:linear-gradient(90deg,#8494b3,#5a6a8c)}
+  .armFill.v2{background:linear-gradient(90deg,#7b6cf6,#5a4fd0)}
+  .armRow{font-family:var(--mono);font-size:.78rem;color:var(--dim);display:flex;justify-content:space-between}
+  .armRow b{color:var(--txt)}
+  #evGridPanel{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+  #evGrid{flex:1;overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column;gap:3px}
+  .evQ{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.78rem;
+    border:1px solid var(--line2);border-radius:6px;padding:3px 8px;background:var(--panel2)}
+  .evQ .dot{width:.6rem;height:.6rem;border-radius:50%;flex:0 0 auto}
+  .evQ.pass .dot{background:var(--ok)} .evQ.fail .dot{background:var(--bad)} .evQ.err .dot{background:var(--warn)}
+  .evQ .qid{flex:0 0 14rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt)}
+  .evQ .qtxt{flex:1;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #evReload{font-size:.78rem;padding:2px 10px;border-radius:7px;border:1px solid var(--accent);
+    color:var(--accent);background:rgba(76,201,240,.08);cursor:pointer;margin-left:auto}
+  #evEmpty2{color:var(--faint);font-size:.84rem;font-family:var(--mono)}
+
   /* ---------- engine lens (M3) ---------- */
   body.lens-engine #main,body.lens-engine #bar{display:none}
   #engMain{display:none;flex:1 1 auto;min-height:0;grid-template-columns:clamp(250px,23rem,370px) 1fr;gap:6px}
@@ -191,7 +218,7 @@
       <button class="tab active" data-lens="tokens">Tokens</button>
       <button class="tab" data-lens="engine">Engine</button>
       <button class="tab" data-lens="rag">RAG</button>
-      <button class="tab stub" title="lands with M5">Evals<small>M5</small></button>
+      <button class="tab" data-lens="evals">Evals</button>
       <button class="tab stub" title="lands with M6">Train<small>M6</small></button>
       <button class="tab stub" title="lands with M7">Artifacts<small>M7</small></button>
       <button class="tab stub" title="lands with M8">K8s<small>M8</small></button>
@@ -297,6 +324,39 @@
         <h2>Retrieved chunks — live from your index</h2>
         <div id="ragChunks"><span id="ragEmpty">no retrieval yet</span></div>
       </div>
+    </div>
+  </div>
+
+  <div id="evMain">
+    <div id="evLeft">
+      <div id="evOffline">
+        No eval results found. Run the M5 eval steps first — the lens reads the JSON files
+        the runs write to <code>labs/opsmate/evals/</code>
+        (<code>retrieval_check.py</code>, then the promptfoo runs). Then press Reload.
+      </div>
+      <div class="panel">
+        <h2>Retrieval layer — the tripwire</h2>
+        <div class="row"><span class="lbl">passed</span><span><span class="val hot" id="evRet">—</span></span></div>
+        <div class="armBar"><div class="armFill" id="evRetBar" style="width:0%"></div></div>
+      </div>
+      <div class="panel">
+        <h2>Generation layer — three arms</h2>
+        <div class="armRow"><span>no-RAG (base)</span><b id="evNoragTxt">—</b></div>
+        <div class="armBar"><div class="armFill norag" id="evNoragBar" style="width:0%"></div></div>
+        <div class="armRow"><span>RAG · system v1</span><b id="evV1Txt">—</b></div>
+        <div class="armBar"><div class="armFill" id="evV1Bar" style="width:0%"></div></div>
+        <div class="armRow"><span>RAG · system v2</span><b id="evV2Txt">—</b></div>
+        <div class="armBar"><div class="armFill v2" id="evV2Bar" style="width:0%"></div></div>
+      </div>
+      <div class="panel">
+        <h2>The gap</h2>
+        <div class="row"><span class="lbl">RAG vs no-RAG</span><span><span class="val hot" id="evGap">—</span></span></div>
+        <div class="row"><span class="lbl">honesty refused (v1)</span><span><span class="val" id="evHon">—</span></span></div>
+      </div>
+    </div>
+    <div class="panel" id="evGridPanel">
+      <h2>Per-question grid — RAG v1 <button id="evReload">Reload</button></h2>
+      <div id="evGrid"><span id="evEmpty2">loading…</span></div>
     </div>
   </div>
 
@@ -524,14 +584,85 @@
 
   /* ---------- presets: the two contrasting experiments from the lab ---------- */
   /* ---------- lens switching (M3+) ---------- */
-  const LENS_NAMES = { tokens: 'Tokens lens', engine: 'Engine lens', rag: 'RAG lens' };
+  const LENS_NAMES = { tokens: 'Tokens lens', engine: 'Engine lens', rag: 'RAG lens', evals: 'Evals lens' };
   document.querySelectorAll('#tabs .tab[data-lens]').forEach(t => t.addEventListener('click', () => {
     document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
     const lens = t.dataset.lens;
     document.body.className = lens === 'tokens' ? '' : 'lens-' + lens;
     $("lensName").textContent = LENS_NAMES[lens] || lens;
+    if (lens === 'evals') loadEvals();
   }));
+
+  /* ---------- Evals lens (M5): scoreboard over the eval JSON files ---------- */
+  async function evalJson(name) {
+    const r = await fetch("/evals/" + name);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    return d;
+  }
+  function graded(results) {
+    return results.filter(x => x.success === true || x.success === false);
+  }
+  function armScore(d) {
+    const g = graded(d.results.results || []);
+    const pass = g.filter(x => x.success === true).length;
+    return { pass, total: g.length };
+  }
+  function setArm(txtId, barId, s) {
+    $(txtId).textContent = s.total ? `${s.pass}/${s.total} (${Math.round(s.pass / s.total * 100)}%)` : "—";
+    $(barId).style.width = s.total ? (s.pass / s.total * 100).toFixed(0) + "%" : "0%";
+  }
+  async function loadEvals() {
+    let any = false;
+    try {
+      const ret = await evalJson("retrieval-latest.json");
+      $("evRet").textContent = `${ret.passed}/${ret.total}`;
+      $("evRetBar").style.width = (ret.passed / ret.total * 100).toFixed(0) + "%";
+      any = true;
+    } catch (e) { $("evRet").textContent = "—"; }
+    let v1 = null;
+    for (const [file, t, b] of [["generation-norag-latest.json", "evNoragTxt", "evNoragBar"],
+                                ["generation-latest.json", "evV1Txt", "evV1Bar"],
+                                ["generation-v2.json", "evV2Txt", "evV2Bar"]]) {
+      try {
+        const d = await evalJson(file);
+        const s = armScore(d);
+        setArm(t, b, s);
+        if (file === "generation-latest.json") { v1 = { d, s }; }
+        any = true;
+      } catch (e) { $(t).textContent = "—"; }
+    }
+    try {
+      const norag = armScore(await evalJson("generation-norag-latest.json"));
+      if (v1 && v1.s.total && norag.total) {
+        const gap = Math.round(v1.s.pass / v1.s.total * 100) - Math.round(norag.pass / norag.total * 100);
+        $("evGap").textContent = (gap >= 0 ? "+" : "") + gap + " pts";
+      }
+    } catch (e) {}
+    const grid = $("evGrid");
+    grid.innerHTML = "";
+    if (v1) {
+      const hon = { refused: 0, total: 0 };
+      for (const r of v1.d.results.results || []) {
+        const id = (r.testCase && r.testCase.description) || (r.vars && String(r.vars.query || "").slice(0, 30)) || "test";
+        const q = (r.vars && r.vars.query) || "";
+        const cls = r.success === true ? "pass" : (r.success === false ? "fail" : "err");
+        if (/honesty|hon-/.test(id)) { hon.total++; if (r.success === true) hon.refused++; }
+        const div = document.createElement("div");
+        div.className = "evQ " + cls;
+        div.innerHTML = `<span class="dot"></span><span class="qid"></span><span class="qtxt"></span>`;
+        div.querySelector(".qid").textContent = id;
+        div.querySelector(".qtxt").textContent = q;
+        grid.appendChild(div);
+      }
+      $("evHon").textContent = hon.total ? `${hon.refused}/${hon.total}` : "—";
+    } else {
+      grid.innerHTML = '<span id="evEmpty2">no generation results yet</span>';
+    }
+    $("evOffline").classList.toggle("show", !any);
+  }
+  $("evReload").addEventListener("click", loadEvals);
 
   /* ---------- RAG lens (M4): live retrieve + ask against the real app ---------- */
   function renderChunks(list, fedTexts) {

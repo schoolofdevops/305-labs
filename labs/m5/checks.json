@@ -1,0 +1,103 @@
+{
+  "checks": [
+    {
+      "id": "judge-model-serves",
+      "describe": "host Ollama serves the eval judge model qwen3:0.6b (Step 0). Self-seeds by pulling it if absent",
+      "run": "ollama list 2>/dev/null | grep -q 'qwen3:0.6b' || ollama pull qwen3:0.6b >/dev/null 2>&1; if ollama list 2>/dev/null | grep -q 'qwen3:0.6b'; then echo judge-ready; else echo judge-missing; fi",
+      "assert": {
+        "contains": "judge-ready"
+      },
+      "weight": 2
+    },
+    {
+      "id": "prompt-externalized-in-app",
+      "describe": "the app reads its system prompt from a file (SYSTEM_PROMPT_FILE) with an inline fallback — the prompt-as-config change (Step 2)",
+      "run": "F=labs/opsmate/app/main.py; if grep -q 'SYSTEM_PROMPT_FILE' \"$F\" && grep -q 'load_system_prompt' \"$F\" && grep -q 'DEFAULT_SYSTEM_PROMPT' \"$F\"; then echo prompt-config; else echo prompt-inline; fi",
+      "assert": {
+        "contains": "prompt-config"
+      },
+      "weight": 2
+    },
+    {
+      "id": "prompt-files-present",
+      "describe": "the versioned system prompts exist — system.txt (v1) and system-v2.txt (the A/B variant) (Step 2, Step 6)",
+      "run": "if [ -s labs/opsmate/prompts/system.txt ] && [ -s labs/opsmate/prompts/system-v2.txt ]; then echo prompts-present; else echo prompts-missing; fi",
+      "assert": {
+        "contains": "prompts-present"
+      },
+      "weight": 1
+    },
+    {
+      "id": "compose-mounts-prompts",
+      "describe": "the compose app service mounts ./prompts read-only and points SYSTEM_PROMPT_FILE at it (Step 2)",
+      "run": "F=labs/opsmate/compose.yaml; if grep -q './prompts:/prompts:ro' \"$F\" && grep -q 'SYSTEM_PROMPT_FILE' \"$F\"; then echo mount-ok; else echo mount-missing; fi",
+      "assert": {
+        "contains": "mount-ok"
+      },
+      "weight": 1
+    },
+    {
+      "id": "stack-up-and-prompt-loaded",
+      "describe": "the stack is up and the app loaded its prompt from the mounted file, reported by /prompt (Step 1, Step 2). Self-seeds the stack if the app is not answering",
+      "run": "curl -fsS --max-time 3 http://localhost:8001/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; for i in $(seq 1 30); do curl -fsS --max-time 3 http://localhost:8001/health >/dev/null 2>&1 && break; sleep 2; done; curl -s --max-time 10 http://localhost:8001/prompt | jq -r '.source' | grep -c 'prompts/system' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo prompt-loaded; else echo prompt-default; fi'",
+      "assert": {
+        "contains": "prompt-loaded"
+      },
+      "weight": 3
+    },
+    {
+      "id": "golden-set-shape",
+      "describe": "the golden set exists with the three layers (retrieval, generation, honesty) and every question carries a source (Step 3)",
+      "run": "F=labs/opsmate/evals/golden.yaml; R=$(grep -c 'layer: retrieval' \"$F\"); G=$(grep -c 'layer: generation' \"$F\"); H=$(grep -c 'layer: honesty' \"$F\"); if [ \"$R\" -ge 8 ] && [ \"$G\" -ge 8 ] && [ \"$H\" -ge 2 ]; then echo golden-shape-ok; else echo golden-shape-bad; fi",
+      "assert": {
+        "contains": "golden-shape-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "index-ingested",
+      "describe": "the Chroma index the golden set evaluates against is built and non-empty (Step 1). Self-seeds the stack and ingests if the index is empty",
+      "run": "curl -fsS --max-time 3 http://localhost:8001/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; [ \"$(curl -s http://localhost:8001/health | jq -r '.chunks // 0')\" -gt 0 ] 2>/dev/null || curl -s --max-time 180 -X POST http://localhost:8001/ingest >/dev/null 2>&1; C=$(curl -s --max-time 10 http://localhost:8001/health | jq -r '.chunks // 0'); if [ \"$C\" -gt 0 ] 2>/dev/null; then echo index-built; else echo index-empty; fi",
+      "assert": {
+        "contains": "index-built"
+      },
+      "weight": 2
+    },
+    {
+      "id": "retrieval-layer-runs-and-reports",
+      "describe": "the deterministic retrieval-layer runner reads golden.yaml, hits /retrieve, and writes a machine-readable summary with a majority of checks passing (Step 4). Self-seeds stack + index",
+      "run": "curl -fsS --max-time 3 http://localhost:8001/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; [ \"$(curl -s http://localhost:8001/health | jq -r '.chunks // 0')\" -gt 0 ] 2>/dev/null || curl -s -X POST http://localhost:8001/ingest >/dev/null 2>&1; APP_URL=http://localhost:8001 uv run --quiet labs/m5/retrieval_check.py >/dev/null 2>&1; P=$(jq -r '.passed // 0' labs/opsmate/evals/retrieval-latest.json 2>/dev/null); T=$(jq -r '.total // 0' labs/opsmate/evals/retrieval-latest.json 2>/dev/null); if [ \"$T\" -gt 0 ] 2>/dev/null && [ \"$P\" -ge \"$(( (T + 1) / 2 ))\" ] 2>/dev/null; then echo retrieval-ok; else echo retrieval-bad; fi",
+      "assert": {
+        "contains": "retrieval-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "promptfoo-tests-generated",
+      "describe": "the promptfoo generation tests are generated from the golden set (Step 5) and contain the graded questions",
+      "run": "uv run --quiet labs/m5/make_promptfoo_tests.py >/dev/null 2>&1; F=labs/opsmate/evals/generation-tests.yaml; if [ -s \"$F\" ] && grep -q 'icontains-any' \"$F\" && grep -q 'llm-rubric' \"$F\"; then echo tests-generated; else echo tests-missing; fi",
+      "assert": {
+        "contains": "tests-generated"
+      },
+      "weight": 2
+    },
+    {
+      "id": "generation-layer-produces-scored-json",
+      "describe": "promptfoo runs the generation layer against /ask and writes a scored results JSON with per-test pass/fail (Step 5). Self-seeds stack + index + tests; graded by the local judge, so allow a long timeout",
+      "run": "curl -fsS --max-time 3 http://localhost:8001/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; [ \"$(curl -s http://localhost:8001/health | jq -r '.chunks // 0')\" -gt 0 ] 2>/dev/null || curl -s -X POST http://localhost:8001/ingest >/dev/null 2>&1; uv run --quiet labs/m5/make_promptfoo_tests.py >/dev/null 2>&1; APP_URL=http://localhost:8001 npx -y promptfoo@latest eval -c labs/opsmate/evals/promptfooconfig.yaml -o labs/opsmate/evals/generation-latest.json --max-concurrency 2 >/dev/null 2>&1; N=$(jq -r '[.results.results[] | select(.success == true or .success == false)] | length' labs/opsmate/evals/generation-latest.json 2>/dev/null); if [ \"$N\" -ge 1 ] 2>/dev/null; then echo generation-scored; else echo generation-unscored; fi",
+      "assert": {
+        "contains": "generation-scored"
+      },
+      "weight": 3
+    },
+    {
+      "id": "baseline-file-present",
+      "describe": "the versioned baseline template exists with both arms (no-RAG vs RAG) so the lab can record real numbers into it (Step 7)",
+      "run": "F=labs/opsmate/evals/baseline.md; if [ -s \"$F\" ] && grep -qi 'no-RAG' \"$F\" && grep -qi 'yardstick' \"$F\"; then echo baseline-present; else echo baseline-missing; fi",
+      "assert": {
+        "contains": "baseline-present"
+      },
+      "weight": 2
+    }
+  ]
+}

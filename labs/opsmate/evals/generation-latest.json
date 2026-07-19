@@ -1,0 +1,3581 @@
+{
+  "evalId": "eval-WaY-2026-07-19T20:51:52",
+  "results": {
+    "version": 3,
+    "timestamp": "2026-07-19T20:51:52.435Z",
+    "prompts": [
+      {
+        "id": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "raw": "{{query}}",
+        "label": "{{query}}",
+        "provider": "opsmate-rag",
+        "metrics": {
+          "score": 10,
+          "testPassCount": 7,
+          "testFailCount": 8,
+          "testErrorCount": 0,
+          "assertPassCount": 20,
+          "assertFailCount": 10,
+          "totalLatencyMs": 201161,
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 15,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 5487,
+              "prompt": 4469,
+              "completion": 1018,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          },
+          "namedScores": {},
+          "namedScoresCount": {},
+          "namedScoreWeights": {},
+          "cost": 0
+        }
+      }
+    ],
+    "results": [
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 370,
+            "prompt": 301,
+            "completion": 69,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "pool",
+                  "connection",
+                  "db_pool_in_use",
+                  "exhaustion"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The answer identifies database connection-pool exhaustion (or the connection pool draining) as the most likely cause of the payments-api 5xx errors. It is acceptable to mention checking the db_pool_in_use gauge. It must NOT claim the cause is a generic code bug with no mention of the pool."
+              },
+              "pass": true,
+              "score": 1,
+              "reason": "The content correctly identifies the cause as database connection-pool exhaustion, which is a specific issue, and mentions checking the db_pool_in_use gauge. It does not claim the cause is a generic code bug, so it passes the test.",
+              "tokensUsed": {
+                "total": 370,
+                "prompt": 301,
+                "completion": 69,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\nThe most likely cause is database connection-pool exhaustion. The payments-api service is experiencing 500 errors due to a bounded pool of connections to the Postgres primary database being drained when downstream queries slow down. This leads to frequent connection failures.\\n</Output>\\n<Rubric>\\nThe answer identifies database connection-pool exhaustion (or the connection pool draining) as the most likely cause of the payments-api 5xx errors. It is acceptable to mention checking the db_pool_in_use gauge. It must NOT claim the cause is a generic code bug with no mention of the pool.\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "0caccbf0-0a19-4f34-85fe-d2b97b0717a1",
+        "latencyMs": 6266,
+        "namedScores": {},
+        "prompt": {
+          "raw": "the payments api is throwing 500s, what is the most likely cause",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"the payments api is throwing 500s, what is the most likely cause\",\"answer\":\"The most likely cause is database connection-pool exhaustion. The payments-api service is experiencing 500 errors due to a bounded pool of connections to the Postgres primary database being drained when downstream queries slow down. This leads to frequent connection failures.\",\"sources\":[{\"source\":\"payments-api-5xx.md\",\"heading\":\"Symptoms\",\"distance\":0.2141},{\"source\":\"payments-api-5xx.md\",\"heading\":\"Most likely cause\",\"distance\":0.2745},{\"source\":\"payments-api-5xx.md\",\"heading\":\"payments-api-5xx.md\",\"distance\":0.3581}]}",
+          "latencyMs": 6266,
+          "cached": true,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "612",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:10:02 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "The most likely cause is database connection-pool exhaustion. The payments-api service is experiencing 500 errors due to a bounded pool of connections to the Postgres primary database being drained when downstream queries slow down. This leads to frequent connection failures.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "gen-payments-pool [payments-api-5xx.md]",
+          "vars": {
+            "query": "the payments api is throwing 500s, what is the most likely cause"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "pool",
+                "connection",
+                "db_pool_in_use",
+                "exhaustion"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The answer identifies database connection-pool exhaustion (or the connection pool draining) as the most likely cause of the payments-api 5xx errors. It is acceptable to mention checking the db_pool_in_use gauge. It must NOT claim the cause is a generic code bug with no mention of the pool."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 0,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 370,
+            "prompt": 301,
+            "completion": 69,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "the payments api is throwing 500s, what is the most likely cause"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "612",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:10:02 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 359,
+            "prompt": 294,
+            "completion": 65,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "pg_is_in_recovery",
+                  "recovery",
+                  "leader",
+                  "patroni"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The answer explains how to identify the real primary — running pg_is_in_recovery() (the primary returns false / f, replicas return true / t), or checking the failover controller (Patroni/repmgr) leader lock. It must point at a concrete check, not a vague \"look at the database\"."
+              },
+              "pass": true,
+              "score": 1,
+              "reason": "The explanation is clear and directly addresses the primary node and replica results. It specifies the command and its expected output, which is a concrete check. The rubric emphasizes a concrete check, so this meets the criteria.",
+              "tokensUsed": {
+                "total": 359,
+                "prompt": 294,
+                "completion": 65,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\n1. On each candidate run, execute the command `SELECT pg_is_in_recovery();` to identify the primary node. The primary node will return `f`, and replicas will return `t`.\\n</Output>\\n<Rubric>\\nThe answer explains how to identify the real primary — running pg_is_in_recovery() (the primary returns false / f, replicas return true / t), or checking the failover controller (Patroni/repmgr) leader lock. It must point at a concrete check, not a vague \\\"look at the database\\\".\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "cec8c017-d93a-42c5-b0ac-2dfce22d185e",
+        "latencyMs": 10218,
+        "namedScores": {},
+        "prompt": {
+          "raw": "how do I find which postgres node is the real primary during a failover",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"how do I find which postgres node is the real primary during a failover\",\"answer\":\"1. On each candidate run, execute the command `SELECT pg_is_in_recovery();` to identify the primary node. The primary node will return `f`, and replicas will return `t`.\",\"sources\":[{\"source\":\"db-failover.md\",\"heading\":\"Most likely cause\",\"distance\":0.1942},{\"source\":\"db-failover.md\",\"heading\":\"Diagnosis\",\"distance\":0.2505},{\"source\":\"db-failover.md\",\"heading\":\"db-failover.md\",\"distance\":0.279}]}",
+          "latencyMs": 10218,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "492",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:51:51 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "1. On each candidate run, execute the command `SELECT pg_is_in_recovery();` to identify the primary node. The primary node will return `f`, and replicas will return `t`.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "gen-db-failover-find-primary [db-failover.md]",
+          "vars": {
+            "query": "how do I find which postgres node is the real primary during a failover"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "pg_is_in_recovery",
+                "recovery",
+                "leader",
+                "patroni"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The answer explains how to identify the real primary — running pg_is_in_recovery() (the primary returns false / f, replicas return true / t), or checking the failover controller (Patroni/repmgr) leader lock. It must point at a concrete check, not a vague \"look at the database\"."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 1,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 359,
+            "prompt": 294,
+            "completion": 65,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "how do I find which postgres node is the real primary during a failover"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "492",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:51:51 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "error": "The answer provides a clear explanation of how to identify the crash and includes specific commands to check logs, which is a strong answer. However, it does not mention the expected steps like using `kubectl logs --previous` or `kubectl describe pod`, making it incomplete. The answer is mostly correct but lacks the necessary details, so it is a weak answer.",
+        "gradingResult": {
+          "pass": false,
+          "score": 0.5,
+          "reason": "The answer provides a clear explanation of how to identify the crash and includes specific commands to check logs, which is a strong answer. However, it does not mention the expected steps like using `kubectl logs --previous` or `kubectl describe pod`, making it incomplete. The answer is mostly correct but lacks the necessary details, so it is a weak answer.",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 412,
+            "prompt": 319,
+            "completion": 93,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "--previous",
+                  "previous",
+                  "kubectl logs",
+                  "describe"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The answer tells the reader to read the PREVIOUS container's logs (kubectl logs --previous) and/or kubectl describe pod for the exit reason (e.g. OOMKilled). Reading only the current container's logs, with no mention of --previous or describe, is a weak answer."
+              },
+              "pass": false,
+              "score": 0,
+              "reason": "The answer provides a clear explanation of how to identify the crash and includes specific commands to check logs, which is a strong answer. However, it does not mention the expected steps like using `kubectl logs --previous` or `kubectl describe pod`, making it incomplete. The answer is mostly correct but lacks the necessary details, so it is a weak answer.",
+              "tokensUsed": {
+                "total": 412,
+                "prompt": 319,
+                "completion": 93,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\nThe actual crash that caused the pod to be in CrashLoopBackOff is the reason for the back-off delay. To identify this, check the pod's logs using `kubectl logs <pod> --previous` to find the crash details, or review the symptoms section for the specific reason (e.g., OOMKilled or Error).\\n</Output>\\n<Rubric>\\nThe answer tells the reader to read the PREVIOUS container's logs (kubectl logs --previous) and/or kubectl describe pod for the exit reason (e.g. OOMKilled). Reading only the current container's logs, with no mention of --previous or describe, is a weak answer.\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "fcc2d389-cad1-4ae0-b85b-ba8342b6b59c",
+        "latencyMs": 16456,
+        "namedScores": {},
+        "prompt": {
+          "raw": "a pod is in CrashLoopBackOff, how do I read what actually crashed",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"a pod is in CrashLoopBackOff, how do I read what actually crashed\",\"answer\":\"The actual crash that caused the pod to be in CrashLoopBackOff is the reason for the back-off delay. To identify this, check the pod's logs using `kubectl logs <pod> --previous` to find the crash details, or review the symptoms section for the specific reason (e.g., OOMKilled or Error).\",\"sources\":[{\"source\":\"k8s-crashloop.md\",\"heading\":\"Diagnosis\",\"distance\":0.2443},{\"source\":\"k8s-crashloop.md\",\"heading\":\"Symptoms\",\"distance\":0.3056},{\"source\":\"k8s-crashloop.md\",\"heading\":\"k8s-crashloop.md\",\"distance\":0.3318}]}",
+          "latencyMs": 16456,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "604",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:51:51 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "The actual crash that caused the pod to be in CrashLoopBackOff is the reason for the back-off delay. To identify this, check the pod's logs using `kubectl logs <pod> --previous` to find the crash details, or review the symptoms section for the specific reason (e.g., OOMKilled or Error).",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 0.5,
+        "success": false,
+        "testCase": {
+          "description": "gen-crashloop-previous-logs [k8s-crashloop.md]",
+          "vars": {
+            "query": "a pod is in CrashLoopBackOff, how do I read what actually crashed"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "--previous",
+                "previous",
+                "kubectl logs",
+                "describe"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The answer tells the reader to read the PREVIOUS container's logs (kubectl logs --previous) and/or kubectl describe pod for the exit reason (e.g. OOMKilled). Reading only the current container's logs, with no mention of --previous or describe, is a weak answer."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 2,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 412,
+            "prompt": 319,
+            "completion": 93,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "a pod is in CrashLoopBackOff, how do I read what actually crashed"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "604",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:51:51 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 1
+      },
+      {
+        "cost": 0,
+        "error": "The answer correctly identifies the priority of reclaiming container-runtime space before pruning logs, which aligns with the recommendation in the rubric. The score is 0.0 as the answer does not fully meet the criteria.",
+        "gradingResult": {
+          "pass": false,
+          "score": 0.5,
+          "reason": "The answer correctly identifies the priority of reclaiming container-runtime space before pruning logs, which aligns with the recommendation in the rubric. The score is 0.0 as the answer does not fully meet the criteria.",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 348,
+            "prompt": 282,
+            "completion": 66,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "prune",
+                  "image",
+                  "log",
+                  "build"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The answer says to reclaim container-runtime space first — pruning unused images and build cache (docker image prune / builder prune) — and/or rotating oversized logs. It should target the biggest, safest reclaim, not just \"free up disk\"."
+              },
+              "pass": false,
+              "score": 0,
+              "reason": "The answer correctly identifies the priority of reclaiming container-runtime space before pruning logs, which aligns with the recommendation in the rubric. The score is 0.0 as the answer does not fully meet the criteria.",
+              "tokensUsed": {
+                "total": 348,
+                "prompt": 282,
+                "completion": 66,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\nThe node's `DiskPressure` condition clears and becomes schedulable again. Reclaiming occurs after this condition is resolved. Prevention involves monitoring `node_filesystem_avail_bytes` and pruning logs to prevent evictions.\\n</Output>\\n<Rubric>\\nThe answer says to reclaim container-runtime space first — pruning unused images and build cache (docker image prune / builder prune) — and/or rotating oversized logs. It should target the biggest, safest reclaim, not just \\\"free up disk\\\".\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "9ba4d022-b6cf-48a0-ae1e-049488af8d1a",
+        "latencyMs": 13260,
+        "namedScores": {},
+        "prompt": {
+          "raw": "a node hit DiskPressure, what do I reclaim first and how",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"a node hit DiskPressure, what do I reclaim first and how\",\"answer\":\"The node's `DiskPressure` condition clears and becomes schedulable again. Reclaiming occurs after this condition is resolved. Prevention involves monitoring `node_filesystem_avail_bytes` and pruning logs to prevent evictions.\",\"sources\":[{\"source\":\"disk-pressure.md\",\"heading\":\"Verification\",\"distance\":0.3054},{\"source\":\"disk-pressure.md\",\"heading\":\"Symptoms\",\"distance\":0.3214},{\"source\":\"disk-pressure.md\",\"heading\":\"Prevention\",\"distance\":0.3465}]}",
+          "latencyMs": 13260,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "530",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:52:03 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "The node's `DiskPressure` condition clears and becomes schedulable again. Reclaiming occurs after this condition is resolved. Prevention involves monitoring `node_filesystem_avail_bytes` and pruning logs to prevent evictions.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 0.5,
+        "success": false,
+        "testCase": {
+          "description": "gen-disk-reclaim [disk-pressure.md]",
+          "vars": {
+            "query": "a node hit DiskPressure, what do I reclaim first and how"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "prune",
+                "image",
+                "log",
+                "build"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The answer says to reclaim container-runtime space first — pruning unused images and build cache (docker image prune / builder prune) — and/or rotating oversized logs. It should target the biggest, safest reclaim, not just \"free up disk\"."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 3,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 348,
+            "prompt": 282,
+            "completion": 66,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "a node hit DiskPressure, what do I reclaim first and how"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "530",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:52:03 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 1
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 395,
+            "prompt": 324,
+            "completion": 71,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "rollout undo",
+                  "undo",
+                  "rollout",
+                  "previous revision"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The answer describes rolling back to the previous revision — kubectl rollout undo (optionally checking rollout history and status). \"Roll back first, investigate second\" is a bonus. It must not tell the user to fix forward during the incident."
+              },
+              "pass": true,
+              "score": 1,
+              "reason": "The answer describes rolling back to the previous revision — kubectl rollout undo (optionally checking rollout history and status). It does not tell the user to fix forward during the incident. The answer is correct and follows the structure of the rubric.",
+              "tokensUsed": {
+                "total": 395,
+                "prompt": 324,
+                "completion": 71,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\n1. Identify the current and previous revision:  \\n   `kubectl -n prod rollout history deploy/payments-api`.  \\n\\n2. Roll back to the previous revision:  \\n   `kubectl -n prod rollout undo deploy/payments-api`.  \\n\\n3. Watch the rollout complete:  \\n   `kubectl -n prod rollout status deploy/payments-api`.  \\n\\n4. Confirm the error rate and latency return to baseline on the dashboard.\\n</Output>\\n<Rubric>\\nThe answer describes rolling back to the previous revision — kubectl rollout undo (optionally checking rollout history and status). \\\"Roll back first, investigate second\\\" is a bonus. It must not tell the user to fix forward during the incident.\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "f5bc1df3-a7d2-4269-8181-ce5466eafb48",
+        "latencyMs": 14767,
+        "namedScores": {},
+        "prompt": {
+          "raw": "how do I roll back a bad deployment of payments-api on kubernetes",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"how do I roll back a bad deployment of payments-api on kubernetes\",\"answer\":\"1. Identify the current and previous revision:  \\n   `kubectl -n prod rollout history deploy/payments-api`.  \\n\\n2. Roll back to the previous revision:  \\n   `kubectl -n prod rollout undo deploy/payments-api`.  \\n\\n3. Watch the rollout complete:  \\n   `kubectl -n prod rollout status deploy/payments-api`.  \\n\\n4. Confirm the error rate and latency return to baseline on the dashboard.\",\"sources\":[{\"source\":\"deploy-rollback.md\",\"heading\":\"Procedure\",\"distance\":0.3097},{\"source\":\"dns-outage.md\",\"heading\":\"Resolution\",\"distance\":0.3438},{\"source\":\"deploy-rollback.md\",\"heading\":\"When to roll back\",\"distance\":0.3513}]}",
+          "latencyMs": 14767,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "706",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:52:09 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "1. Identify the current and previous revision:  \n   `kubectl -n prod rollout history deploy/payments-api`.  \n\n2. Roll back to the previous revision:  \n   `kubectl -n prod rollout undo deploy/payments-api`.  \n\n3. Watch the rollout complete:  \n   `kubectl -n prod rollout status deploy/payments-api`.  \n\n4. Confirm the error rate and latency return to baseline on the dashboard.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "gen-deploy-rollback-cmd [deploy-rollback.md]",
+          "vars": {
+            "query": "how do I roll back a bad deployment of payments-api on kubernetes"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "rollout undo",
+                "undo",
+                "rollout",
+                "previous revision"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The answer describes rolling back to the previous revision — kubectl rollout undo (optionally checking rollout history and status). \"Roll back first, investigate second\" is a bonus. It must not tell the user to fix forward during the incident."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 4,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 395,
+            "prompt": 324,
+            "completion": 71,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "how do I roll back a bad deployment of payments-api on kubernetes"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "706",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:52:09 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "error": "The answer names at least one real cache-stampede fix: request coalescing / single-flight (only the first request recomputes), early/probabilistic recomputation, or jittered TTLs. A generic 'add more cache' is not sufficient.",
+        "gradingResult": {
+          "pass": false,
+          "score": 0,
+          "reason": "The answer names at least one real cache-stampede fix: request coalescing / single-flight (only the first request recomputes), early/probabilistic recomputation, or jittered TTLs. A generic 'add more cache' is not sufficient.",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 400,
+            "prompt": 324,
+            "completion": 76,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": false,
+              "score": 0,
+              "reason": "Expected output to contain one of \"single-flight, coalesc, jitter, recompute, probabilistic\"",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "single-flight",
+                  "coalesc",
+                  "jitter",
+                  "recompute",
+                  "probabilistic"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The answer names at least one real cache-stampede fix: request coalescing / single-flight (only the first request recomputes), early/probabilistic recomputation, or jittered TTLs. A generic \"add more cache\" is not sufficient."
+              },
+              "pass": false,
+              "score": 0,
+              "reason": "The answer names at least one real cache-stampede fix: request coalescing / single-flight (only the first request recomputes), early/probabilistic recomputation, or jittered TTLs. A generic 'add more cache' is not sufficient.",
+              "tokensUsed": {
+                "total": 400,
+                "prompt": 324,
+                "completion": 76,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\nBased on the runbook, to stop a cache stampede when a hot key expires, follow these steps:  \\n1. **Check origin load**: Confirm there is a burst of identical queries for the same key.  \\n2. **Adjust hit ratio**: Ensure the cache hit ratio drops to near zero briefly at each recurrence.  \\n\\nThese actions align with the diagnosis steps provided in the runbook.\\n</Output>\\n<Rubric>\\nThe answer names at least one real cache-stampede fix: request coalescing / single-flight (only the first request recomputes), early/probabilistic recomputation, or jittered TTLs. A generic \\\"add more cache\\\" is not sufficient.\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "914a8a69-aa3c-49f7-b747-280adca0171b",
+        "latencyMs": 16956,
+        "namedScores": {},
+        "prompt": {
+          "raw": "how do I stop a cache stampede when a hot key expires",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"how do I stop a cache stampede when a hot key expires\",\"answer\":\"Based on the runbook, to stop a cache stampede when a hot key expires, follow these steps:  \\n1. **Check origin load**: Confirm there is a burst of identical queries for the same key.  \\n2. **Adjust hit ratio**: Ensure the cache hit ratio drops to near zero briefly at each recurrence.  \\n\\nThese actions align with the diagnosis steps provided in the runbook.\",\"sources\":[{\"source\":\"cache-stampede.md\",\"heading\":\"Most likely cause\",\"distance\":0.2218},{\"source\":\"cache-stampede.md\",\"heading\":\"Diagnosis\",\"distance\":0.307},{\"source\":\"cache-stampede.md\",\"heading\":\"Symptoms\",\"distance\":0.3194}]}",
+          "latencyMs": 16956,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "668",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:52:17 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "Based on the runbook, to stop a cache stampede when a hot key expires, follow these steps:  \n1. **Check origin load**: Confirm there is a burst of identical queries for the same key.  \n2. **Adjust hit ratio**: Ensure the cache hit ratio drops to near zero briefly at each recurrence.  \n\nThese actions align with the diagnosis steps provided in the runbook.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 0,
+        "success": false,
+        "testCase": {
+          "description": "gen-cache-stampede-fix [cache-stampede.md]",
+          "vars": {
+            "query": "how do I stop a cache stampede when a hot key expires"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "single-flight",
+                "coalesc",
+                "jitter",
+                "recompute",
+                "probabilistic"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The answer names at least one real cache-stampede fix: request coalescing / single-flight (only the first request recomputes), early/probabilistic recomputation, or jittered TTLs. A generic \"add more cache\" is not sufficient."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 5,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 400,
+            "prompt": 324,
+            "completion": 76,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "how do I stop a cache stampede when a hot key expires"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "668",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:52:17 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 1
+      },
+      {
+        "cost": 0,
+        "error": "The answer correctly identifies a poison message and routes it to a dead-letter queue, which is a key part of the poison message solution. The mention of 'restart the consumer' without the DLQ idea is incomplete and does not fully address the poison message scenario. However, the response correctly identifies the poison message and includes the necessary steps for handling it, making the answer partially correct.",
+        "gradingResult": {
+          "pass": false,
+          "score": 0.5,
+          "reason": "The answer correctly identifies a poison message and routes it to a dead-letter queue, which is a key part of the poison message solution. The mention of 'restart the consumer' without the DLQ idea is incomplete and does not fully address the poison message scenario. However, the response correctly identifies the poison message and includes the necessary steps for handling it, making the answer partially correct.",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 414,
+            "prompt": 316,
+            "completion": 98,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "dead-letter",
+                  "dead letter",
+                  "dlq",
+                  "poison"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The answer identifies a poison message and routes it to a dead-letter queue so the partition can advance, then investigates it off the hot path. Just \"restart the consumer\" without the DLQ idea is incomplete."
+              },
+              "pass": false,
+              "score": 0,
+              "reason": "The answer correctly identifies a poison message and routes it to a dead-letter queue, which is a key part of the poison message solution. The mention of 'restart the consumer' without the DLQ idea is incomplete and does not fully address the poison message scenario. However, the response correctly identifies the poison message and includes the necessary steps for handling it, making the answer partially correct.",
+              "tokensUsed": {
+                "total": 414,
+                "prompt": 316,
+                "completion": 98,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\n- **Under-provisioned:** Scale consumers out (add replicas / partitions) until the queue drains, then start falling.  \\n- **Stuck consumer:** Fix or restart the blocked consumer; if it's blocked on a slow downstream, address that first.  \\n- **Poison message:** Route the failing message to a dead-letter queue so the partition can advance, then investigate the message off the hot path.\\n</Output>\\n<Rubric>\\nThe answer identifies a poison message and routes it to a dead-letter queue so the partition can advance, then investigates it off the hot path. Just \\\"restart the consumer\\\" without the DLQ idea is incomplete.\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "45236f5f-cc6c-42d2-bb24-1413dbe69c99",
+        "latencyMs": 13475,
+        "namedScores": {},
+        "prompt": {
+          "raw": "one message keeps failing on a loop and blocking the queue partition, what do I do",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"one message keeps failing on a loop and blocking the queue partition, what do I do\",\"answer\":\"- **Under-provisioned:** Scale consumers out (add replicas / partitions) until the queue drains, then start falling.  \\n- **Stuck consumer:** Fix or restart the blocked consumer; if it's blocked on a slow downstream, address that first.  \\n- **Poison message:** Route the failing message to a dead-letter queue so the partition can advance, then investigate the message off the hot path.\",\"sources\":[{\"source\":\"queue-backlog.md\",\"heading\":\"Prevention\",\"distance\":0.3075},{\"source\":\"queue-backlog.md\",\"heading\":\"Resolution\",\"distance\":0.31},{\"source\":\"queue-backlog.md\",\"heading\":\"Most likely cause\",\"distance\":0.3118}]}",
+          "latencyMs": 13475,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "723",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:52:25 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "- **Under-provisioned:** Scale consumers out (add replicas / partitions) until the queue drains, then start falling.  \n- **Stuck consumer:** Fix or restart the blocked consumer; if it's blocked on a slow downstream, address that first.  \n- **Poison message:** Route the failing message to a dead-letter queue so the partition can advance, then investigate the message off the hot path.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 0.5,
+        "success": false,
+        "testCase": {
+          "description": "gen-queue-poison [queue-backlog.md]",
+          "vars": {
+            "query": "one message keeps failing on a loop and blocking the queue partition, what do I do"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "dead-letter",
+                "dead letter",
+                "dlq",
+                "poison"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The answer identifies a poison message and routes it to a dead-letter queue so the partition can advance, then investigates it off the hot path. Just \"restart the consumer\" without the DLQ idea is incomplete."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 6,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 414,
+            "prompt": 316,
+            "completion": 98,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "one message keeps failing on a loop and blocking the queue partition, what do I do"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "723",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:52:25 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 1
+      },
+      {
+        "cost": 0,
+        "error": "The statement does not align with the requirements of the rubric, as it fails to mention the expected action of triggering renewal or issuance automatically. The rubric emphasizes automation and immediate action, so this response does not pass the test.",
+        "gradingResult": {
+          "pass": false,
+          "score": 0.5,
+          "reason": "The statement does not align with the requirements of the rubric, as it fails to mention the expected action of triggering renewal or issuance automatically. The rubric emphasizes automation and immediate action, so this response does not pass the test.",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 322,
+            "prompt": 258,
+            "completion": 64,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "cert-manager",
+                  "renew",
+                  "acme",
+                  "reissue",
+                  "re-issue",
+                  "certificaterequest"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The answer triggers an immediate renewal/re-issue (e.g. via cert-manager or the ACME client) and then rolls the terminating proxies to pick up the new cert. It should point at forcing issuance, not \"wait for the automated job\"."
+              },
+              "pass": false,
+              "score": 0,
+              "reason": "The statement does not align with the requirements of the rubric, as it fails to mention the expected action of triggering renewal or issuance automatically. The rubric emphasizes automation and immediate action, so this response does not pass the test.",
+              "tokensUsed": {
+                "total": 322,
+                "prompt": 258,
+                "completion": 64,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\nI do not have a runbook for handling certificate renewal or issuing new certificates in production.\\n</Output>\\n<Rubric>\\nThe answer triggers an immediate renewal/re-issue (e.g. via cert-manager or the ACME client) and then rolls the terminating proxies to pick up the new cert. It should point at forcing issuance, not \\\"wait for the automated job\\\".\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "5817a372-0ca5-4fde-beac-539f21a80c60",
+        "latencyMs": 8697,
+        "namedScores": {},
+        "prompt": {
+          "raw": "a tls certificate expired in production, how do I get a new one issued fast",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"a tls certificate expired in production, how do I get a new one issued fast\",\"answer\":\"I do not have a runbook for handling certificate renewal or issuing new certificates in production.\",\"sources\":[{\"source\":\"tls-cert-rotation.md\",\"heading\":\"Prevention\",\"distance\":0.2573},{\"source\":\"tls-cert-rotation.md\",\"heading\":\"Diagnosis\",\"distance\":0.2699},{\"source\":\"tls-cert-rotation.md\",\"heading\":\"Symptoms\",\"distance\":0.297}]}",
+          "latencyMs": 8697,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "431",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:52:36 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "I do not have a runbook for handling certificate renewal or issuing new certificates in production.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 0.5,
+        "success": false,
+        "testCase": {
+          "description": "gen-tls-renew [tls-cert-rotation.md]",
+          "vars": {
+            "query": "a tls certificate expired in production, how do I get a new one issued fast"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "cert-manager",
+                "renew",
+                "acme",
+                "reissue",
+                "re-issue",
+                "certificaterequest"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The answer triggers an immediate renewal/re-issue (e.g. via cert-manager or the ACME client) and then rolls the terminating proxies to pick up the new cert. It should point at forcing issuance, not \"wait for the automated job\"."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 7,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 322,
+            "prompt": 258,
+            "completion": 64,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "a tls certificate expired in production, how do I get a new one issued fast"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "431",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:52:36 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 1
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 311,
+            "prompt": 269,
+            "completion": 42,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "5 min",
+                  "five min",
+                  "secondary",
+                  "auto-escalate",
+                  "incident commander"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The answer reflects the escalation ladder: primary acknowledges within about 5 minutes or the page auto-escalates to secondary, and an incident commander is engaged for a SEV1. Concrete timing/roles beat a vague \"escalate quickly\"."
+              },
+              "pass": true,
+              "score": 1,
+              "reason": "The content reflects a concrete escalation process with specific timing and roles, which beats the vague 'escalate quickly' requirement.",
+              "tokensUsed": {
+                "total": 311,
+                "prompt": 269,
+                "completion": 42,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\nAfter 5 minutes, an unacknowledged SEV1 page auto-escalates, and the unacknowledged page is pulled in.\\n</Output>\\n<Rubric>\\nThe answer reflects the escalation ladder: primary acknowledges within about 5 minutes or the page auto-escalates to secondary, and an incident commander is engaged for a SEV1. Concrete timing/roles beat a vague \\\"escalate quickly\\\".\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "8620abd5-56c4-4884-9337-b7144461de28",
+        "latencyMs": 22169,
+        "namedScores": {},
+        "prompt": {
+          "raw": "how long before an unacknowledged SEV1 page escalates and who gets pulled in",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"how long before an unacknowledged SEV1 page escalates and who gets pulled in\",\"answer\":\"After 5 minutes, an unacknowledged SEV1 page auto-escalates, and the unacknowledged page is pulled in.\",\"sources\":[{\"source\":\"oncall-escalation.md\",\"heading\":\"Escalation ladder\",\"distance\":0.2927},{\"source\":\"oncall-escalation.md\",\"heading\":\"During the incident\",\"distance\":0.3044},{\"source\":\"oncall-escalation.md\",\"heading\":\"Purpose\",\"distance\":0.3464}]}",
+          "latencyMs": 22169,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "452",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:52:41 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "After 5 minutes, an unacknowledged SEV1 page auto-escalates, and the unacknowledged page is pulled in.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "gen-escalation-sev1 [oncall-escalation.md]",
+          "vars": {
+            "query": "how long before an unacknowledged SEV1 page escalates and who gets pulled in"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "5 min",
+                "five min",
+                "secondary",
+                "auto-escalate",
+                "incident commander"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The answer reflects the escalation ladder: primary acknowledges within about 5 minutes or the page auto-escalates to secondary, and an incident commander is engaged for a SEV1. Concrete timing/roles beat a vague \"escalate quickly\"."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 8,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 311,
+            "prompt": 269,
+            "completion": 42,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "how long before an unacknowledged SEV1 page escalates and who gets pulled in"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "452",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:52:41 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 385,
+            "prompt": 322,
+            "completion": 63,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "commander",
+                  "operations lead",
+                  "communications",
+                  "comms"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The answer names the three distinct roles — incident commander (owns decisions, no keyboards), operations lead (drives investigation/remediation), and communications lead (status page, updates, timeline). Missing a role or merging them is a weak answer."
+              },
+              "pass": true,
+              "score": 1,
+              "reason": "The answer names the three distinct roles as specified in the rubric, and the content correctly identifies each role with their respective responsibilities. The answer passes the test as it meets the criteria for completeness and accuracy.",
+              "tokensUsed": {
+                "total": 385,
+                "prompt": 322,
+                "completion": 63,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\nThree roles must be filled in a major incident: the **incident commander**, **operations lead**, and **communications lead**.  \\n- The **incident commander** owns decisions and priorities, does not engage in diagnosis.  \\n- The **operations lead** drives investigation and remediation, delegating hands-on tasks.  \\n- The **communications lead** manages the status page, stakeholder updates, and timeline updates.\\n</Output>\\n<Rubric>\\nThe answer names the three distinct roles — incident commander (owns decisions, no keyboards), operations lead (drives investigation/remediation), and communications lead (status page, updates, timeline). Missing a role or merging them is a weak answer.\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "3d36b403-e7bf-4c68-85f5-5c9ff469eae6",
+        "latencyMs": 14297,
+        "namedScores": {},
+        "prompt": {
+          "raw": "what three roles must be filled in a major incident and what does each own",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"what three roles must be filled in a major incident and what does each own\",\"answer\":\"Three roles must be filled in a major incident: the **incident commander**, **operations lead**, and **communications lead**.  \\n- The **incident commander** owns decisions and priorities, does not engage in diagnosis.  \\n- The **operations lead** drives investigation and remediation, delegating hands-on tasks.  \\n- The **communications lead** manages the status page, stakeholder updates, and timeline updates.\",\"sources\":[{\"source\":\"major-incident-playbook.md\",\"heading\":\"Roles and the first fifteen minutes\",\"distance\":0.2942},{\"source\":\"major-incident-playbook.md\",\"heading\":\"Declaring a major incident\",\"distance\":0.3001},{\"source\":\"oncall-escalation.md\",\"heading\":\"Purpose\",\"distance\":0.3506}]}",
+          "latencyMs": 14297,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "798",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:52:46 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "Three roles must be filled in a major incident: the **incident commander**, **operations lead**, and **communications lead**.  \n- The **incident commander** owns decisions and priorities, does not engage in diagnosis.  \n- The **operations lead** drives investigation and remediation, delegating hands-on tasks.  \n- The **communications lead** manages the status page, stakeholder updates, and timeline updates.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "gen-incident-roles [major-incident-playbook.md]",
+          "vars": {
+            "query": "what three roles must be filled in a major incident and what does each own"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "commander",
+                "operations lead",
+                "communications",
+                "comms"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The answer names the three distinct roles — incident commander (owns decisions, no keyboards), operations lead (drives investigation/remediation), and communications lead (status page, updates, timeline). Missing a role or merging them is a weak answer."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 9,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 385,
+            "prompt": 322,
+            "completion": 63,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "what three roles must be filled in a major incident and what does each own"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "798",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:52:46 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 337,
+            "prompt": 280,
+            "completion": 57,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "restore",
+                  "recovery-time",
+                  "recovery time",
+                  "rto",
+                  "duration",
+                  "drill"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The answer explains the restore drill proves the backups actually restore, and that the measured restore duration is the real recovery-time objective (not the number on a slide). \"A backup you have never restored is a hope\" is the spirit."
+              },
+              "pass": true,
+              "score": 1,
+              "reason": "The content explains the restore drill's purpose and its impact on backup effectiveness and recovery time, which aligns with the rubric's expectations. The explanation is clear and accurate, passing the test.",
+              "tokensUsed": {
+                "total": 337,
+                "prompt": 280,
+                "completion": 57,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\nThe monthly restore drill is run to verify that backups actually work and ensure recovery time is met. It measures row-count and integrity checks, the measured restore time, and logs the result with the date and duration.\\n</Output>\\n<Rubric>\\nThe answer explains the restore drill proves the backups actually restore, and that the measured restore duration is the real recovery-time objective (not the number on a slide). \\\"A backup you have never restored is a hope\\\" is the spirit.\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "96b072ce-ff7c-438c-bef3-190ed0ef357b",
+        "latencyMs": 14343,
+        "namedScores": {},
+        "prompt": {
+          "raw": "why do we run a monthly restore drill and what does the drill measure",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"why do we run a monthly restore drill and what does the drill measure\",\"answer\":\"The monthly restore drill is run to verify that backups actually work and ensure recovery time is met. It measures row-count and integrity checks, the measured restore time, and logs the result with the date and duration.\",\"sources\":[{\"source\":\"backup-restore.md\",\"heading\":\"The restore drill (do this monthly)\",\"distance\":0.2244},{\"source\":\"backup-restore.md\",\"heading\":\"Verification\",\"distance\":0.2815},{\"source\":\"backup-restore.md\",\"heading\":\"Purpose\",\"distance\":0.3286}]}",
+          "latencyMs": 14343,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "566",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:53:01 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "The monthly restore drill is run to verify that backups actually work and ensure recovery time is met. It measures row-count and integrity checks, the measured restore time, and logs the result with the date and duration.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "gen-backup-drill [backup-restore.md]",
+          "vars": {
+            "query": "why do we run a monthly restore drill and what does the drill measure"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "restore",
+                "recovery-time",
+                "recovery time",
+                "rto",
+                "duration",
+                "drill"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The answer explains the restore drill proves the backups actually restore, and that the measured restore duration is the real recovery-time objective (not the number on a slide). \"A backup you have never restored is a hope\" is the spirit."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 10,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 337,
+            "prompt": 280,
+            "completion": 57,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "why do we run a monthly restore drill and what does the drill measure"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "566",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:53:01 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 392,
+            "prompt": 309,
+            "completion": 83,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "SSO",
+                  "identity",
+                  "idp",
+                  "gateway",
+                  "non-VPN",
+                  "break-glass"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The answer distinguishes gateway vs IdP: a broad multi-location report points at the gateway or the IdP (not clients), and you confirm the IdP by testing a non-VPN SSO login. Mentioning the break-glass path is a bonus."
+              },
+              "pass": true,
+              "score": 1,
+              "reason": "The answer distinguishes between the gateway and the identity provider (IdP) by highlighting their respective roles and providing a multi-location check, while mentioning the 'break-glass path' as a bonus. The response correctly identifies the issue and provides a clear distinction between the two components, making it a valid response to the test.",
+              "tokensUsed": {
+                "total": 392,
+                "prompt": 309,
+                "completion": 83,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\nCheck the VPN gateway's health and capacity first. If it's down or under capacity, it's likely the issue. If the gateway is up but clients aren't connecting, check the identity provider (SSO) for login failures. If the problem is widespread across locations, it's either the gateway or the identity provider.\\n</Output>\\n<Rubric>\\nThe answer distinguishes gateway vs IdP: a broad multi-location report points at the gateway or the IdP (not clients), and you confirm the IdP by testing a non-VPN SSO login. Mentioning the break-glass path is a bonus.\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "b206f70d-084c-4012-be91-ee78298b1178",
+        "latencyMs": 14707,
+        "namedScores": {},
+        "prompt": {
+          "raw": "lots of engineers lost VPN access at once, how do I tell if it is the gateway or the identity provider",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"lots of engineers lost VPN access at once, how do I tell if it is the gateway or the identity provider\",\"answer\":\"Check the VPN gateway's health and capacity first. If it's down or under capacity, it's likely the issue. If the gateway is up but clients aren't connecting, check the identity provider (SSO) for login failures. If the problem is widespread across locations, it's either the gateway or the identity provider.\",\"sources\":[{\"source\":\"vpn-access.md\",\"heading\":\"Diagnosis\",\"distance\":0.2201},{\"source\":\"vpn-access.md\",\"heading\":\"Most likely cause\",\"distance\":0.2225},{\"source\":\"vpn-access.md\",\"heading\":\"Symptoms\",\"distance\":0.301}]}",
+          "latencyMs": 14707,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "653",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:53:04 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "Check the VPN gateway's health and capacity first. If it's down or under capacity, it's likely the issue. If the gateway is up but clients aren't connecting, check the identity provider (SSO) for login failures. If the problem is widespread across locations, it's either the gateway or the identity provider.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "gen-vpn-scope [vpn-access.md]",
+          "vars": {
+            "query": "lots of engineers lost VPN access at once, how do I tell if it is the gateway or the identity provider"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "SSO",
+                "identity",
+                "idp",
+                "gateway",
+                "non-VPN",
+                "break-glass"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The answer distinguishes gateway vs IdP: a broad multi-location report points at the gateway or the IdP (not clients), and you confirm the IdP by testing a non-VPN SSO login. Mentioning the break-glass path is a bonus."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 11,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 392,
+            "prompt": 309,
+            "completion": 83,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "lots of engineers lost VPN access at once, how do I tell if it is the gateway or the identity provider"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "653",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:53:04 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "error": "The assistant acknowledges the lack of a specific runbook for this question and explains the gap, failing to provide a concrete answer as required by the rubric.",
+        "gradingResult": {
+          "pass": false,
+          "score": 0,
+          "reason": "The assistant acknowledges the lack of a specific runbook for this question and explains the gap, failing to provide a concrete answer as required by the rubric.",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 395,
+            "prompt": 346,
+            "completion": 49,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": false,
+              "score": 0,
+              "reason": "Expected output to contain one of \"do not have a runbook, don't have a runbook, no runbook, not covered, cannot find, could not find, not in the, does not contain\"",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "do not have a runbook",
+                  "don't have a runbook",
+                  "no runbook",
+                  "not covered",
+                  "cannot find",
+                  "could not find",
+                  "not in the",
+                  "does not contain"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The assistant declines to answer because it has no runbook for this question — it admits the gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently provides a specific answer as if a runbook covered it, this FAILS."
+              },
+              "pass": false,
+              "score": 0,
+              "reason": "The assistant acknowledges the lack of a specific runbook for this question and explains the gap, failing to provide a concrete answer as required by the rubric.",
+              "tokensUsed": {
+                "total": 395,
+                "prompt": 346,
+                "completion": 49,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\nThe optimal number of Kafka partitions for your checkout topic depends on balancing queue depth and system performance. According to the \\\"Under-provisioned\\\" resolution, scaling consumers out (adding replicas or partitions) is recommended to manage the queue depth and prevent it from reaching a critical point. This approach ensures the queue remains stable and the system can handle traffic effectively. However, the exact number of partitions is not explicitly stated in the provided runbooks, as it is determined by factors like queue depth and system capacity.\\n</Output>\\n<Rubric>\\nThe assistant declines to answer because it has no runbook for this question — it admits the gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently provides a specific answer as if a runbook covered it, this FAILS.\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "b62e0c08-cf21-4b7d-80ab-84e674ba0062",
+        "latencyMs": 22382,
+        "namedScores": {},
+        "prompt": {
+          "raw": "what is the optimal number of Kafka partitions for our checkout topic",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"what is the optimal number of Kafka partitions for our checkout topic\",\"answer\":\"The optimal number of Kafka partitions for your checkout topic depends on balancing queue depth and system performance. According to the \\\"Under-provisioned\\\" resolution, scaling consumers out (adding replicas or partitions) is recommended to manage the queue depth and prevent it from reaching a critical point. This approach ensures the queue remains stable and the system can handle traffic effectively. However, the exact number of partitions is not explicitly stated in the provided runbooks, as it is determined by factors like queue depth and system capacity.\",\"sources\":[{\"source\":\"queue-backlog.md\",\"heading\":\"Prevention\",\"distance\":0.4147},{\"source\":\"queue-backlog.md\",\"heading\":\"Resolution\",\"distance\":0.4305},{\"source\":\"capacity-review-guide.md\",\"heading\":\"Cost, procurement and the action list\",\"distance\":0.4326}]}",
+          "latencyMs": 22382,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "919",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:53:16 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "The optimal number of Kafka partitions for your checkout topic depends on balancing queue depth and system performance. According to the \"Under-provisioned\" resolution, scaling consumers out (adding replicas or partitions) is recommended to manage the queue depth and prevent it from reaching a critical point. This approach ensures the queue remains stable and the system can handle traffic effectively. However, the exact number of partitions is not explicitly stated in the provided runbooks, as it is determined by factors like queue depth and system capacity.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 0,
+        "success": false,
+        "testCase": {
+          "description": "hon-kafka-tuning [honesty — unanswerable]",
+          "vars": {
+            "query": "what is the optimal number of Kafka partitions for our checkout topic"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "do not have a runbook",
+                "don't have a runbook",
+                "no runbook",
+                "not covered",
+                "cannot find",
+                "could not find",
+                "not in the",
+                "does not contain"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The assistant declines to answer because it has no runbook for this question — it admits the gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently provides a specific answer as if a runbook covered it, this FAILS."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 12,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 395,
+            "prompt": 346,
+            "completion": 49,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "what is the optimal number of Kafka partitions for our checkout topic"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "919",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:53:16 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 1
+      },
+      {
+        "cost": 0,
+        "error": "The statement does not meet the criteria of providing a specific answer as if a runbook covered it, and instead admits the gap rather than inventing steps, commands, numbers, or a runbook name. This fails the test.",
+        "gradingResult": {
+          "pass": false,
+          "score": 0.5,
+          "reason": "The statement does not meet the criteria of providing a specific answer as if a runbook covered it, and instead admits the gap rather than inventing steps, commands, numbers, or a runbook name. This fails the test.",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 325,
+            "prompt": 261,
+            "completion": 64,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "do not have a runbook",
+                  "don't have a runbook",
+                  "no runbook",
+                  "not covered",
+                  "cannot find",
+                  "could not find",
+                  "not in the",
+                  "does not contain"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The assistant declines to answer because it has no runbook for this question — it admits the gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently provides a specific answer as if a runbook covered it, this FAILS."
+              },
+              "pass": false,
+              "score": 0,
+              "reason": "The statement does not meet the criteria of providing a specific answer as if a runbook covered it, and instead admits the gap rather than inventing steps, commands, numbers, or a runbook name. This fails the test.",
+              "tokensUsed": {
+                "total": 325,
+                "prompt": 261,
+                "completion": 64,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\nI do not have a runbook for compensation details for on-call rotations.\\n</Output>\\n<Rubric>\\nThe assistant declines to answer because it has no runbook for this question — it admits the gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently provides a specific answer as if a runbook covered it, this FAILS.\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "1b2b7962-79eb-4e5a-9975-847a76c9c175",
+        "latencyMs": 6640,
+        "namedScores": {},
+        "prompt": {
+          "raw": "how much do we pay engineers for a week of on-call rotation",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"how much do we pay engineers for a week of on-call rotation\",\"answer\":\"I do not have a runbook for compensation details for on-call rotations.\",\"sources\":[{\"source\":\"oncall-escalation.md\",\"heading\":\"Escalation ladder\",\"distance\":0.4566},{\"source\":\"payments-api-5xx.md\",\"heading\":\"payments-api-5xx.md\",\"distance\":0.4872},{\"source\":\"tls-cert-rotation.md\",\"heading\":\"tls-cert-rotation.md\",\"distance\":0.5014}]}",
+          "latencyMs": 6640,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "416",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:53:19 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "I do not have a runbook for compensation details for on-call rotations.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 0.5,
+        "success": false,
+        "testCase": {
+          "description": "hon-oncall-pay [honesty — unanswerable]",
+          "vars": {
+            "query": "how much do we pay engineers for a week of on-call rotation"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "do not have a runbook",
+                "don't have a runbook",
+                "no runbook",
+                "not covered",
+                "cannot find",
+                "could not find",
+                "not in the",
+                "does not contain"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The assistant declines to answer because it has no runbook for this question — it admits the gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently provides a specific answer as if a runbook covered it, this FAILS."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 13,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 325,
+            "prompt": 261,
+            "completion": 64,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "how much do we pay engineers for a week of on-call rotation"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "416",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:53:19 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 1
+      },
+      {
+        "cost": 0,
+        "error": "The assistant does not provide a runbook for the question about GPU driver versions on inference nodes, which is required for the test. The response fails to address the question as intended, failing the test.",
+        "gradingResult": {
+          "pass": false,
+          "score": 0.5,
+          "reason": "The assistant does not provide a runbook for the question about GPU driver versions on inference nodes, which is required for the test. The response fails to address the question as intended, failing the test.",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 322,
+            "prompt": 264,
+            "completion": 58,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains-any",
+                "value": [
+                  "do not have a runbook",
+                  "don't have a runbook",
+                  "no runbook",
+                  "not covered",
+                  "cannot find",
+                  "could not find",
+                  "not in the",
+                  "does not contain"
+                ]
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The assistant declines to answer because it has no runbook for this question — it admits the gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently provides a specific answer as if a runbook covered it, this FAILS."
+              },
+              "pass": false,
+              "score": 0,
+              "reason": "The assistant does not provide a runbook for the question about GPU driver versions on inference nodes, which is required for the test. The response fails to address the question as intended, failing the test.",
+              "tokensUsed": {
+                "total": 322,
+                "prompt": 264,
+                "completion": 58,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\nI do not have a runbook for the question about GPU driver versions on inference nodes.\\n</Output>\\n<Rubric>\\nThe assistant declines to answer because it has no runbook for this question — it admits the gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently provides a specific answer as if a runbook covered it, this FAILS.\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "1cd2c9c3-75e2-4aee-b57d-7fe516278813",
+        "latencyMs": 6528,
+        "namedScores": {},
+        "prompt": {
+          "raw": "which GPU driver version should we pin on the inference nodes",
+          "label": "{{query}}",
+          "config": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          }
+        },
+        "promptId": "8868fc514e5f7bd1a350480c5a825cd0f5b47b6c0c8da0ca62be71158f638c23",
+        "promptIdx": 0,
+        "provider": {
+          "id": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "label": "opsmate-rag"
+        },
+        "response": {
+          "raw": "{\"query\":\"which GPU driver version should we pin on the inference nodes\",\"answer\":\"I do not have a runbook for the question about GPU driver versions on inference nodes.\",\"sources\":[{\"source\":\"db-failover.md\",\"heading\":\"Diagnosis\",\"distance\":0.4197},{\"source\":\"dns-outage.md\",\"heading\":\"Resolution\",\"distance\":0.4408},{\"source\":\"cache-stampede.md\",\"heading\":\"Diagnosis\",\"distance\":0.443}]}",
+          "latencyMs": 6528,
+          "cached": false,
+          "metadata": {
+            "http": {
+              "status": 200,
+              "statusText": "OK",
+              "headers": {
+                "content-length": "389",
+                "content-type": "application/json",
+                "date": "Sun, 19 Jul 2026 20:53:27 GMT",
+                "server": "uvicorn"
+              }
+            }
+          },
+          "output": "I do not have a runbook for the question about GPU driver versions on inference nodes.",
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          }
+        },
+        "score": 0.5,
+        "success": false,
+        "testCase": {
+          "description": "hon-gpu-driver [honesty — unanswerable]",
+          "vars": {
+            "query": "which GPU driver version should we pin on the inference nodes"
+          },
+          "assert": [
+            {
+              "type": "icontains-any",
+              "value": [
+                "do not have a runbook",
+                "don't have a runbook",
+                "no runbook",
+                "not covered",
+                "cannot find",
+                "could not find",
+                "not in the",
+                "does not contain"
+              ]
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The assistant declines to answer because it has no runbook for this question — it admits the gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently provides a specific answer as if a runbook covered it, this FAILS."
+            }
+          ],
+          "options": {
+            "provider": {
+              "id": "ollama:chat:qwen3:0.6b",
+              "config": {
+                "temperature": 0,
+                "think": false
+              }
+            }
+          },
+          "metadata": {}
+        },
+        "testIdx": 14,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 322,
+            "prompt": 264,
+            "completion": 58,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "query": "which GPU driver version should we pin on the inference nodes"
+        },
+        "metadata": {
+          "http": {
+            "status": 200,
+            "statusText": "OK",
+            "headers": {
+              "content-length": "389",
+              "content-type": "application/json",
+              "date": "Sun, 19 Jul 2026 20:53:27 GMT",
+              "server": "uvicorn"
+            }
+          },
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 1
+      }
+    ],
+    "stats": {
+      "successes": 7,
+      "failures": 8,
+      "errors": 0,
+      "tokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "total": 0,
+        "numRequests": 15,
+        "completionDetails": {
+          "reasoning": 0,
+          "acceptedPrediction": 0,
+          "rejectedPrediction": 0,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 0
+        },
+        "assertions": {
+          "total": 5487,
+          "prompt": 4469,
+          "completion": 1018,
+          "cached": 0,
+          "numRequests": 0,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          }
+        }
+      },
+      "durationMs": 107715,
+      "evaluationDurationMs": 107715
+    }
+  },
+  "config": {
+    "tags": {},
+    "description": "OpsMate generation-layer golden eval (RAG /ask, local judge)",
+    "prompts": [
+      "{{query}}"
+    ],
+    "providers": [
+      {
+        "id": "https",
+        "label": "opsmate-rag",
+        "config": {
+          "url": "http://localhost:8001/ask?q={{query | urlencode}}",
+          "method": "GET",
+          "transformResponse": "json.answer"
+        }
+      }
+    ],
+    "tests": [
+      {
+        "description": "gen-payments-pool [payments-api-5xx.md]",
+        "vars": {
+          "query": "the payments api is throwing 500s, what is the most likely cause"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "pool",
+              "connection",
+              "db_pool_in_use",
+              "exhaustion"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The answer identifies database connection-pool exhaustion (or the connection pool draining) as the most likely cause of the payments-api 5xx errors. It is acceptable to mention checking the db_pool_in_use gauge. It must NOT claim the cause is a generic code bug with no mention of the pool."
+          }
+        ]
+      },
+      {
+        "description": "gen-db-failover-find-primary [db-failover.md]",
+        "vars": {
+          "query": "how do I find which postgres node is the real primary during a failover"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "pg_is_in_recovery",
+              "recovery",
+              "leader",
+              "patroni"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The answer explains how to identify the real primary — running pg_is_in_recovery() (the primary returns false / f, replicas return true / t), or checking the failover controller (Patroni/repmgr) leader lock. It must point at a concrete check, not a vague \"look at the database\"."
+          }
+        ]
+      },
+      {
+        "description": "gen-crashloop-previous-logs [k8s-crashloop.md]",
+        "vars": {
+          "query": "a pod is in CrashLoopBackOff, how do I read what actually crashed"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "--previous",
+              "previous",
+              "kubectl logs",
+              "describe"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The answer tells the reader to read the PREVIOUS container's logs (kubectl logs --previous) and/or kubectl describe pod for the exit reason (e.g. OOMKilled). Reading only the current container's logs, with no mention of --previous or describe, is a weak answer."
+          }
+        ]
+      },
+      {
+        "description": "gen-disk-reclaim [disk-pressure.md]",
+        "vars": {
+          "query": "a node hit DiskPressure, what do I reclaim first and how"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "prune",
+              "image",
+              "log",
+              "build"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The answer says to reclaim container-runtime space first — pruning unused images and build cache (docker image prune / builder prune) — and/or rotating oversized logs. It should target the biggest, safest reclaim, not just \"free up disk\"."
+          }
+        ]
+      },
+      {
+        "description": "gen-deploy-rollback-cmd [deploy-rollback.md]",
+        "vars": {
+          "query": "how do I roll back a bad deployment of payments-api on kubernetes"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "rollout undo",
+              "undo",
+              "rollout",
+              "previous revision"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The answer describes rolling back to the previous revision — kubectl rollout undo (optionally checking rollout history and status). \"Roll back first, investigate second\" is a bonus. It must not tell the user to fix forward during the incident."
+          }
+        ]
+      },
+      {
+        "description": "gen-cache-stampede-fix [cache-stampede.md]",
+        "vars": {
+          "query": "how do I stop a cache stampede when a hot key expires"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "single-flight",
+              "coalesc",
+              "jitter",
+              "recompute",
+              "probabilistic"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The answer names at least one real cache-stampede fix: request coalescing / single-flight (only the first request recomputes), early/probabilistic recomputation, or jittered TTLs. A generic \"add more cache\" is not sufficient."
+          }
+        ]
+      },
+      {
+        "description": "gen-queue-poison [queue-backlog.md]",
+        "vars": {
+          "query": "one message keeps failing on a loop and blocking the queue partition, what do I do"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "dead-letter",
+              "dead letter",
+              "dlq",
+              "poison"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The answer identifies a poison message and routes it to a dead-letter queue so the partition can advance, then investigates it off the hot path. Just \"restart the consumer\" without the DLQ idea is incomplete."
+          }
+        ]
+      },
+      {
+        "description": "gen-tls-renew [tls-cert-rotation.md]",
+        "vars": {
+          "query": "a tls certificate expired in production, how do I get a new one issued fast"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "cert-manager",
+              "renew",
+              "acme",
+              "reissue",
+              "re-issue",
+              "certificaterequest"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The answer triggers an immediate renewal/re-issue (e.g. via cert-manager or the ACME client) and then rolls the terminating proxies to pick up the new cert. It should point at forcing issuance, not \"wait for the automated job\"."
+          }
+        ]
+      },
+      {
+        "description": "gen-escalation-sev1 [oncall-escalation.md]",
+        "vars": {
+          "query": "how long before an unacknowledged SEV1 page escalates and who gets pulled in"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "5 min",
+              "five min",
+              "secondary",
+              "auto-escalate",
+              "incident commander"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The answer reflects the escalation ladder: primary acknowledges within about 5 minutes or the page auto-escalates to secondary, and an incident commander is engaged for a SEV1. Concrete timing/roles beat a vague \"escalate quickly\"."
+          }
+        ]
+      },
+      {
+        "description": "gen-incident-roles [major-incident-playbook.md]",
+        "vars": {
+          "query": "what three roles must be filled in a major incident and what does each own"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "commander",
+              "operations lead",
+              "communications",
+              "comms"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The answer names the three distinct roles — incident commander (owns decisions, no keyboards), operations lead (drives investigation/remediation), and communications lead (status page, updates, timeline). Missing a role or merging them is a weak answer."
+          }
+        ]
+      },
+      {
+        "description": "gen-backup-drill [backup-restore.md]",
+        "vars": {
+          "query": "why do we run a monthly restore drill and what does the drill measure"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "restore",
+              "recovery-time",
+              "recovery time",
+              "rto",
+              "duration",
+              "drill"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The answer explains the restore drill proves the backups actually restore, and that the measured restore duration is the real recovery-time objective (not the number on a slide). \"A backup you have never restored is a hope\" is the spirit."
+          }
+        ]
+      },
+      {
+        "description": "gen-vpn-scope [vpn-access.md]",
+        "vars": {
+          "query": "lots of engineers lost VPN access at once, how do I tell if it is the gateway or the identity provider"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "SSO",
+              "identity",
+              "idp",
+              "gateway",
+              "non-VPN",
+              "break-glass"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The answer distinguishes gateway vs IdP: a broad multi-location report points at the gateway or the IdP (not clients), and you confirm the IdP by testing a non-VPN SSO login. Mentioning the break-glass path is a bonus."
+          }
+        ]
+      },
+      {
+        "description": "hon-kafka-tuning [honesty — unanswerable]",
+        "vars": {
+          "query": "what is the optimal number of Kafka partitions for our checkout topic"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "do not have a runbook",
+              "don't have a runbook",
+              "no runbook",
+              "not covered",
+              "cannot find",
+              "could not find",
+              "not in the",
+              "does not contain"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The assistant declines to answer because it has no runbook for this question — it admits the gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently provides a specific answer as if a runbook covered it, this FAILS."
+          }
+        ]
+      },
+      {
+        "description": "hon-oncall-pay [honesty — unanswerable]",
+        "vars": {
+          "query": "how much do we pay engineers for a week of on-call rotation"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "do not have a runbook",
+              "don't have a runbook",
+              "no runbook",
+              "not covered",
+              "cannot find",
+              "could not find",
+              "not in the",
+              "does not contain"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The assistant declines to answer because it has no runbook for this question — it admits the gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently provides a specific answer as if a runbook covered it, this FAILS."
+          }
+        ]
+      },
+      {
+        "description": "hon-gpu-driver [honesty — unanswerable]",
+        "vars": {
+          "query": "which GPU driver version should we pin on the inference nodes"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "do not have a runbook",
+              "don't have a runbook",
+              "no runbook",
+              "not covered",
+              "cannot find",
+              "could not find",
+              "not in the",
+              "does not contain"
+            ]
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The assistant declines to answer because it has no runbook for this question — it admits the gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently provides a specific answer as if a runbook covered it, this FAILS."
+          }
+        ]
+      }
+    ],
+    "env": {},
+    "defaultTest": {
+      "options": {
+        "provider": {
+          "id": "ollama:chat:qwen3:0.6b",
+          "config": {
+            "temperature": 0,
+            "think": false
+          }
+        }
+      },
+      "vars": {},
+      "assert": [],
+      "metadata": {}
+    },
+    "outputPath": [
+      "labs/opsmate/evals/generation-latest.json"
+    ],
+    "extensions": [],
+    "metadata": {},
+    "evaluateOptions": {}
+  },
+  "shareableUrl": null,
+  "metadata": {
+    "promptfooVersion": "0.121.19",
+    "nodeVersion": "v22.22.2",
+    "platform": "darwin",
+    "arch": "arm64",
+    "exportedAt": "2026-07-19T20:53:40.240Z",
+    "evaluationCreatedAt": "2026-07-19T20:51:52.435Z"
+  },
+  "vars": [
+    "query"
+  ],
+  "runtimeOptions": {
+    "eventSource": "cli",
+    "showProgressBar": true,
+    "repeat": 1,
+    "maxConcurrency": 2,
+    "cache": true
+  }
+}

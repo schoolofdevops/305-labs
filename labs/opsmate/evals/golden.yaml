@@ -1,0 +1,365 @@
+# ============================================================================
+# OpsMate golden eval set — v1
+#
+# This file is the YARDSTICK. Every later stage of the course measures against
+# the numbers this set produces: M6's fine-tune must BEAT the baseline it sets,
+# M12 GATES promotion on it, M13 REPLAYS it. Treat it like a test suite, because
+# that is what it is.
+#
+# Design rules (see the M5 lesson + deep dive):
+#   1. Every question is authored FROM a corpus passage. `source:` names the
+#      runbook the question and its answer come from — traceable, and reusable as
+#      M6 training/eval data. No question is invented out of thin air.
+#   2. Two graded layers plus an honesty layer:
+#        layer: retrieval  — deterministic. The RIGHT source runbook must appear
+#                            in /retrieve's top-3. Phrase-independent, stable, fast;
+#                            this is the regression tripwire. Checked by
+#                            labs/m5/retrieval_check.py.
+#        layer: generation — graded. The ANSWER is judged by wide contains-any nets
+#                            + an LLM rubric (a local judge). Run by promptfoo
+#                            (labs/opsmate/evals/promptfooconfig.yaml).
+#        layer: honesty    — an UNANSWERABLE question. The corpus has no runbook for
+#                            it, so the correct behaviour is to admit the gap. If the
+#                            model bluffs a confident answer, that is a FAILURE and
+#                            the eval must catch it.
+#   3. `contains_any` nets are WIDE on purpose. A 0.6B model paraphrases; asserting
+#      an exact phrase is brittle (the M5 spike proved it). We assert that the
+#      answer names the right THING, in any of several wordings.
+#
+# Fields per question:
+#   id            stable slug (used in reports + the X-Ray Evals lens)
+#   layer         retrieval | generation | honesty
+#   source        the runbook this question was authored from (the traceable link)
+#   question      what we ask OpsMate
+#   expect_source (retrieval/generation) the source file that MUST be retrieved
+#   contains_any  (generation) any one of these substrings = a grounded answer
+#   rubric        (generation) the criterion handed to the LLM judge
+#   must_refuse   (honesty) true — the answer must admit no runbook covers this
+#   refuse_any    (honesty) phrases that count as an honest "I don't have that"
+# ============================================================================
+
+questions:
+  # --- RETRIEVAL LAYER — deterministic top-3 source checks ------------------
+  # These say nothing about the wording of the answer. They assert only that the
+  # right runbook is what gets put in front of the model. If retrieval regresses
+  # (a bad chunking change, a stale index), these go red first and cheapest.
+
+  - id: retr-payments-5xx
+    layer: retrieval
+    source: payments-api-5xx.md
+    question: the payments api is returning 500s, what do I check first
+    expect_source: payments-api-5xx.md
+
+  - id: retr-db-failover
+    layer: retrieval
+    source: db-failover.md
+    question: writes are failing with cannot execute INSERT in a read-only transaction
+    expect_source: db-failover.md
+
+  - id: retr-crashloop
+    layer: retrieval
+    source: k8s-crashloop.md
+    question: a pod keeps restarting with CrashLoopBackOff and rising restart count
+    expect_source: k8s-crashloop.md
+
+  - id: retr-disk-pressure
+    layer: retrieval
+    source: disk-pressure.md
+    question: a kubernetes node is evicting pods and reports no space left on device
+    expect_source: disk-pressure.md
+
+  - id: retr-dns-outage
+    layer: retrieval
+    source: dns-outage.md
+    question: services cannot reach each other by name but work by raw IP
+    expect_source: dns-outage.md
+
+  - id: retr-tls-expiry
+    layer: retrieval
+    source: tls-cert-rotation.md
+    question: clients are failing with certificate has expired across every region
+    expect_source: tls-cert-rotation.md
+
+  - id: retr-queue-backlog
+    layer: retrieval
+    source: queue-backlog.md
+    question: the order processing queue depth keeps climbing and will not drain
+    expect_source: queue-backlog.md
+
+  - id: retr-cache-stampede
+    layer: retrieval
+    source: cache-stampede.md
+    question: latency spikes exactly when a popular cache key expires
+    expect_source: cache-stampede.md
+
+  - id: retr-vpn-access
+    layer: retrieval
+    source: vpn-access.md
+    question: many engineers across locations suddenly cannot reach internal tools over the VPN
+    expect_source: vpn-access.md
+
+  - id: retr-major-incident
+    layer: retrieval
+    source: major-incident-playbook.md
+    question: when should we declare a major incident and who becomes incident commander
+    expect_source: major-incident-playbook.md
+
+  - id: retr-capacity-review
+    layer: retrieval
+    source: capacity-review-guide.md
+    question: how do I model headroom per service for the quarterly capacity review
+    expect_source: capacity-review-guide.md
+
+  - id: retr-backup-restore
+    layer: retrieval
+    source: backup-restore.md
+    question: how do I restore the production database to a point in time before a bad delete
+    expect_source: backup-restore.md
+
+  # --- GENERATION LAYER — graded answers (wide nets + LLM rubric) -----------
+  # These assert the right source is retrieved AND the answer names the right
+  # concrete thing. contains_any is deliberately wide (a small model paraphrases);
+  # rubric is the softer semantic check for the local judge.
+
+  - id: gen-payments-pool
+    layer: generation
+    source: payments-api-5xx.md
+    question: the payments api is throwing 500s, what is the most likely cause
+    expect_source: payments-api-5xx.md
+    contains_any:
+      - "pool"
+      - "connection"
+      - "db_pool_in_use"
+      - "exhaustion"
+    rubric: >
+      The answer identifies database connection-pool exhaustion (or the connection
+      pool draining) as the most likely cause of the payments-api 5xx errors. It is
+      acceptable to mention checking the db_pool_in_use gauge. It must NOT claim the
+      cause is a generic code bug with no mention of the pool.
+
+  - id: gen-db-failover-find-primary
+    layer: generation
+    source: db-failover.md
+    question: how do I find which postgres node is the real primary during a failover
+    expect_source: db-failover.md
+    contains_any:
+      - "pg_is_in_recovery"
+      - "recovery"
+      - "leader"
+      - "patroni"
+    rubric: >
+      The answer explains how to identify the real primary — running
+      pg_is_in_recovery() (the primary returns false / f, replicas return true / t),
+      or checking the failover controller (Patroni/repmgr) leader lock. It must point
+      at a concrete check, not a vague "look at the database".
+
+  - id: gen-crashloop-previous-logs
+    layer: generation
+    source: k8s-crashloop.md
+    question: a pod is in CrashLoopBackOff, how do I read what actually crashed
+    expect_source: k8s-crashloop.md
+    contains_any:
+      - "--previous"
+      - "previous"
+      - "kubectl logs"
+      - "describe"
+    rubric: >
+      The answer tells the reader to read the PREVIOUS container's logs
+      (kubectl logs --previous) and/or kubectl describe pod for the exit reason
+      (e.g. OOMKilled). Reading only the current container's logs, with no mention of
+      --previous or describe, is a weak answer.
+
+  - id: gen-disk-reclaim
+    layer: generation
+    source: disk-pressure.md
+    question: a node hit DiskPressure, what do I reclaim first and how
+    expect_source: disk-pressure.md
+    contains_any:
+      - "prune"
+      - "image"
+      - "log"
+      - "build"
+    rubric: >
+      The answer says to reclaim container-runtime space first — pruning unused images
+      and build cache (docker image prune / builder prune) — and/or rotating oversized
+      logs. It should target the biggest, safest reclaim, not just "free up disk".
+
+  - id: gen-deploy-rollback-cmd
+    layer: generation
+    source: deploy-rollback.md
+    question: how do I roll back a bad deployment of payments-api on kubernetes
+    expect_source: deploy-rollback.md
+    contains_any:
+      - "rollout undo"
+      - "undo"
+      - "rollout"
+      - "previous revision"
+    rubric: >
+      The answer describes rolling back to the previous revision — kubectl rollout undo
+      (optionally checking rollout history and status). "Roll back first, investigate
+      second" is a bonus. It must not tell the user to fix forward during the incident.
+
+  - id: gen-cache-stampede-fix
+    layer: generation
+    source: cache-stampede.md
+    question: how do I stop a cache stampede when a hot key expires
+    expect_source: cache-stampede.md
+    contains_any:
+      - "single-flight"
+      - "coalesc"
+      - "jitter"
+      - "recompute"
+      - "probabilistic"
+    rubric: >
+      The answer names at least one real cache-stampede fix: request coalescing /
+      single-flight (only the first request recomputes), early/probabilistic
+      recomputation, or jittered TTLs. A generic "add more cache" is not sufficient.
+
+  - id: gen-queue-poison
+    layer: generation
+    source: queue-backlog.md
+    question: one message keeps failing on a loop and blocking the queue partition, what do I do
+    expect_source: queue-backlog.md
+    contains_any:
+      - "dead-letter"
+      - "dead letter"
+      - "dlq"
+      - "poison"
+    rubric: >
+      The answer identifies a poison message and routes it to a dead-letter queue so
+      the partition can advance, then investigates it off the hot path. Just "restart
+      the consumer" without the DLQ idea is incomplete.
+
+  - id: gen-tls-renew
+    layer: generation
+    source: tls-cert-rotation.md
+    question: a tls certificate expired in production, how do I get a new one issued fast
+    expect_source: tls-cert-rotation.md
+    contains_any:
+      - "cert-manager"
+      - "renew"
+      - "acme"
+      - "reissue"
+      - "re-issue"
+      - "certificaterequest"
+    rubric: >
+      The answer triggers an immediate renewal/re-issue (e.g. via cert-manager or the
+      ACME client) and then rolls the terminating proxies to pick up the new cert. It
+      should point at forcing issuance, not "wait for the automated job".
+
+  - id: gen-escalation-sev1
+    layer: generation
+    source: oncall-escalation.md
+    question: how long before an unacknowledged SEV1 page escalates and who gets pulled in
+    expect_source: oncall-escalation.md
+    contains_any:
+      - "5 min"
+      - "five min"
+      - "secondary"
+      - "auto-escalate"
+      - "incident commander"
+    rubric: >
+      The answer reflects the escalation ladder: primary acknowledges within about 5
+      minutes or the page auto-escalates to secondary, and an incident commander is
+      engaged for a SEV1. Concrete timing/roles beat a vague "escalate quickly".
+
+  - id: gen-incident-roles
+    layer: generation
+    source: major-incident-playbook.md
+    question: what three roles must be filled in a major incident and what does each own
+    expect_source: major-incident-playbook.md
+    contains_any:
+      - "commander"
+      - "operations lead"
+      - "communications"
+      - "comms"
+    rubric: >
+      The answer names the three distinct roles — incident commander (owns decisions,
+      no keyboards), operations lead (drives investigation/remediation), and
+      communications lead (status page, updates, timeline). Missing a role or merging
+      them is a weak answer.
+
+  - id: gen-backup-drill
+    layer: generation
+    source: backup-restore.md
+    question: why do we run a monthly restore drill and what does the drill measure
+    expect_source: backup-restore.md
+    contains_any:
+      - "restore"
+      - "recovery-time"
+      - "recovery time"
+      - "rto"
+      - "duration"
+      - "drill"
+    rubric: >
+      The answer explains the restore drill proves the backups actually restore, and
+      that the measured restore duration is the real recovery-time objective (not the
+      number on a slide). "A backup you have never restored is a hope" is the spirit.
+
+  - id: gen-vpn-scope
+    layer: generation
+    source: vpn-access.md
+    question: lots of engineers lost VPN access at once, how do I tell if it is the gateway or the identity provider
+    expect_source: vpn-access.md
+    contains_any:
+      - "SSO"
+      - "identity"
+      - "idp"
+      - "gateway"
+      - "non-VPN"
+      - "break-glass"
+    rubric: >
+      The answer distinguishes gateway vs IdP: a broad multi-location report points at
+      the gateway or the IdP (not clients), and you confirm the IdP by testing a
+      non-VPN SSO login. Mentioning the break-glass path is a bonus.
+
+  # --- HONESTY LAYER — unanswerable-from-corpus questions -------------------
+  # There is NO runbook for any of these. The corpus is SRE runbooks for a
+  # fictional retailer; these are plausible-sounding but out of scope. The correct
+  # answer is to say so. A confident invented answer is the failure this layer
+  # exists to catch — and it SHOULD fail the generation asserts if the model bluffs.
+
+  - id: hon-kafka-tuning
+    layer: honesty
+    source: (none — deliberately out of corpus)
+    question: what is the optimal number of Kafka partitions for our checkout topic
+    must_refuse: true
+    refuse_any:
+      - "do not have a runbook"
+      - "don't have a runbook"
+      - "no runbook"
+      - "not covered"
+      - "cannot find"
+      - "could not find"
+      - "not in the"
+      - "does not contain"
+
+  - id: hon-oncall-pay
+    layer: honesty
+    source: (none — deliberately out of corpus)
+    question: how much do we pay engineers for a week of on-call rotation
+    must_refuse: true
+    refuse_any:
+      - "do not have a runbook"
+      - "don't have a runbook"
+      - "no runbook"
+      - "not covered"
+      - "cannot find"
+      - "could not find"
+      - "not in the"
+      - "does not contain"
+
+  - id: hon-gpu-driver
+    layer: honesty
+    source: (none — deliberately out of corpus)
+    question: which GPU driver version should we pin on the inference nodes
+    must_refuse: true
+    refuse_any:
+      - "do not have a runbook"
+      - "don't have a runbook"
+      - "no runbook"
+      - "not covered"
+      - "cannot find"
+      - "could not find"
+      - "not in the"
+      - "does not contain"

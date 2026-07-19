@@ -6,7 +6,10 @@
 #   M3  model            — the serving engine (llama-server), this file's first service
 #   M4  + app, ui         — RAG over the runbooks (FastAPI backend + Streamlit UI,
 #                           Chroma embedded in the app, embeddings via host Ollama)
-#   M5  + eval harness
+#   M5  + prompts mount   — the app's system prompt becomes a versioned config
+#                           artifact (./prompts, read-only), and evals/ holds the
+#                           golden set + baseline. No new service — M5 grows the
+#                           app's config surface, not the container count.
 #   ... through M7, then the Compose phase is retired for Kubernetes (M8+).
 #
 # Rule for the whole course: one service is added or grown per module, and the
@@ -74,9 +77,14 @@ services:
       CHAT_MODEL: qwen3-0.6b
       CORPUS_DIR: /corpus
       CHROMA_DIR: /data/chroma
+      # M5: the system prompt is config, not code. Point the app at the mounted
+      # prompt file; swap the file (system.txt ↔ system-v2.txt) + restart to A/B a
+      # prompt with zero code change. Unset this to fall back to the inline default.
+      SYSTEM_PROMPT_FILE: ${SYSTEM_PROMPT_FILE:-/prompts/system.txt}
     volumes:
       - ./data/chroma:/data/chroma        # the embedded Chroma store, persisted
       - ./corpus:/corpus:ro               # the runbook corpus, read-only
+      - ./prompts:/prompts:ro             # M5: versioned system prompts, read-only
     mem_limit: 1g
     extra_hosts:
       # Linux needs this mapping to reach the host; Docker Desktop provides it

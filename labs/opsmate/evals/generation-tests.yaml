@@ -1,0 +1,233 @@
+# GENERATED from golden.yaml by labs/m5/make_promptfoo_tests.py — do not edit by hand.
+# Regenerate: uv run labs/m5/make_promptfoo_tests.py
+- description: gen-payments-pool [payments-api-5xx.md]
+  vars:
+    query: the payments api is throwing 500s, what is the most likely cause
+  assert:
+  - type: icontains-any
+    value:
+    - pool
+    - connection
+    - db_pool_in_use
+    - exhaustion
+  - type: llm-rubric
+    value: The answer identifies database connection-pool exhaustion (or the connection pool draining)
+      as the most likely cause of the payments-api 5xx errors. It is acceptable to mention checking the
+      db_pool_in_use gauge. It must NOT claim the cause is a generic code bug with no mention of the pool.
+- description: gen-db-failover-find-primary [db-failover.md]
+  vars:
+    query: how do I find which postgres node is the real primary during a failover
+  assert:
+  - type: icontains-any
+    value:
+    - pg_is_in_recovery
+    - recovery
+    - leader
+    - patroni
+  - type: llm-rubric
+    value: The answer explains how to identify the real primary — running pg_is_in_recovery() (the primary
+      returns false / f, replicas return true / t), or checking the failover controller (Patroni/repmgr)
+      leader lock. It must point at a concrete check, not a vague "look at the database".
+- description: gen-crashloop-previous-logs [k8s-crashloop.md]
+  vars:
+    query: a pod is in CrashLoopBackOff, how do I read what actually crashed
+  assert:
+  - type: icontains-any
+    value:
+    - --previous
+    - previous
+    - kubectl logs
+    - describe
+  - type: llm-rubric
+    value: The answer tells the reader to read the PREVIOUS container's logs (kubectl logs --previous)
+      and/or kubectl describe pod for the exit reason (e.g. OOMKilled). Reading only the current container's
+      logs, with no mention of --previous or describe, is a weak answer.
+- description: gen-disk-reclaim [disk-pressure.md]
+  vars:
+    query: a node hit DiskPressure, what do I reclaim first and how
+  assert:
+  - type: icontains-any
+    value:
+    - prune
+    - image
+    - log
+    - build
+  - type: llm-rubric
+    value: The answer says to reclaim container-runtime space first — pruning unused images and build
+      cache (docker image prune / builder prune) — and/or rotating oversized logs. It should target the
+      biggest, safest reclaim, not just "free up disk".
+- description: gen-deploy-rollback-cmd [deploy-rollback.md]
+  vars:
+    query: how do I roll back a bad deployment of payments-api on kubernetes
+  assert:
+  - type: icontains-any
+    value:
+    - rollout undo
+    - undo
+    - rollout
+    - previous revision
+  - type: llm-rubric
+    value: The answer describes rolling back to the previous revision — kubectl rollout undo (optionally
+      checking rollout history and status). "Roll back first, investigate second" is a bonus. It must
+      not tell the user to fix forward during the incident.
+- description: gen-cache-stampede-fix [cache-stampede.md]
+  vars:
+    query: how do I stop a cache stampede when a hot key expires
+  assert:
+  - type: icontains-any
+    value:
+    - single-flight
+    - coalesc
+    - jitter
+    - recompute
+    - probabilistic
+  - type: llm-rubric
+    value: 'The answer names at least one real cache-stampede fix: request coalescing / single-flight
+      (only the first request recomputes), early/probabilistic recomputation, or jittered TTLs. A generic
+      "add more cache" is not sufficient.'
+- description: gen-queue-poison [queue-backlog.md]
+  vars:
+    query: one message keeps failing on a loop and blocking the queue partition, what do I do
+  assert:
+  - type: icontains-any
+    value:
+    - dead-letter
+    - dead letter
+    - dlq
+    - poison
+  - type: llm-rubric
+    value: The answer identifies a poison message and routes it to a dead-letter queue so the partition
+      can advance, then investigates it off the hot path. Just "restart the consumer" without the DLQ
+      idea is incomplete.
+- description: gen-tls-renew [tls-cert-rotation.md]
+  vars:
+    query: a tls certificate expired in production, how do I get a new one issued fast
+  assert:
+  - type: icontains-any
+    value:
+    - cert-manager
+    - renew
+    - acme
+    - reissue
+    - re-issue
+    - certificaterequest
+  - type: llm-rubric
+    value: The answer triggers an immediate renewal/re-issue (e.g. via cert-manager or the ACME client)
+      and then rolls the terminating proxies to pick up the new cert. It should point at forcing issuance,
+      not "wait for the automated job".
+- description: gen-escalation-sev1 [oncall-escalation.md]
+  vars:
+    query: how long before an unacknowledged SEV1 page escalates and who gets pulled in
+  assert:
+  - type: icontains-any
+    value:
+    - 5 min
+    - five min
+    - secondary
+    - auto-escalate
+    - incident commander
+  - type: llm-rubric
+    value: 'The answer reflects the escalation ladder: primary acknowledges within about 5 minutes or
+      the page auto-escalates to secondary, and an incident commander is engaged for a SEV1. Concrete
+      timing/roles beat a vague "escalate quickly".'
+- description: gen-incident-roles [major-incident-playbook.md]
+  vars:
+    query: what three roles must be filled in a major incident and what does each own
+  assert:
+  - type: icontains-any
+    value:
+    - commander
+    - operations lead
+    - communications
+    - comms
+  - type: llm-rubric
+    value: The answer names the three distinct roles — incident commander (owns decisions, no keyboards),
+      operations lead (drives investigation/remediation), and communications lead (status page, updates,
+      timeline). Missing a role or merging them is a weak answer.
+- description: gen-backup-drill [backup-restore.md]
+  vars:
+    query: why do we run a monthly restore drill and what does the drill measure
+  assert:
+  - type: icontains-any
+    value:
+    - restore
+    - recovery-time
+    - recovery time
+    - rto
+    - duration
+    - drill
+  - type: llm-rubric
+    value: The answer explains the restore drill proves the backups actually restore, and that the measured
+      restore duration is the real recovery-time objective (not the number on a slide). "A backup you
+      have never restored is a hope" is the spirit.
+- description: gen-vpn-scope [vpn-access.md]
+  vars:
+    query: lots of engineers lost VPN access at once, how do I tell if it is the gateway or the identity
+      provider
+  assert:
+  - type: icontains-any
+    value:
+    - SSO
+    - identity
+    - idp
+    - gateway
+    - non-VPN
+    - break-glass
+  - type: llm-rubric
+    value: 'The answer distinguishes gateway vs IdP: a broad multi-location report points at the gateway
+      or the IdP (not clients), and you confirm the IdP by testing a non-VPN SSO login. Mentioning the
+      break-glass path is a bonus.'
+- description: hon-kafka-tuning [honesty — unanswerable]
+  vars:
+    query: what is the optimal number of Kafka partitions for our checkout topic
+  assert:
+  - type: icontains-any
+    value:
+    - do not have a runbook
+    - don't have a runbook
+    - no runbook
+    - not covered
+    - cannot find
+    - could not find
+    - not in the
+    - does not contain
+  - type: llm-rubric
+    value: The assistant declines to answer because it has no runbook for this question — it admits the
+      gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently
+      provides a specific answer as if a runbook covered it, this FAILS.
+- description: hon-oncall-pay [honesty — unanswerable]
+  vars:
+    query: how much do we pay engineers for a week of on-call rotation
+  assert:
+  - type: icontains-any
+    value:
+    - do not have a runbook
+    - don't have a runbook
+    - no runbook
+    - not covered
+    - cannot find
+    - could not find
+    - not in the
+    - does not contain
+  - type: llm-rubric
+    value: The assistant declines to answer because it has no runbook for this question — it admits the
+      gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently
+      provides a specific answer as if a runbook covered it, this FAILS.
+- description: hon-gpu-driver [honesty — unanswerable]
+  vars:
+    query: which GPU driver version should we pin on the inference nodes
+  assert:
+  - type: icontains-any
+    value:
+    - do not have a runbook
+    - don't have a runbook
+    - no runbook
+    - not covered
+    - cannot find
+    - could not find
+    - not in the
+    - does not contain
+  - type: llm-rubric
+    value: The assistant declines to answer because it has no runbook for this question — it admits the
+      gap rather than inventing steps, commands, numbers, or a runbook name. If the answer confidently
+      provides a specific answer as if a runbook covered it, this FAILS.

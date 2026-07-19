@@ -1,0 +1,63 @@
+# ============================================================================
+# OpsMate generation-layer eval — promptfoo config
+#
+# The GRADED half of the golden set. Where retrieval_check.py asks "did the right
+# runbook get retrieved?" (deterministic), this asks "is the generated ANSWER any
+# good?" (graded). It drives the app's /ask endpoint — full RAG, real answers —
+# and grades each answer two ways:
+#   1. contains-any  — a wide lexical net (the answer names the right THING in any
+#                      of several wordings). Cheap, deterministic, brittle if made
+#                      narrow — so the nets in golden.yaml are deliberately wide.
+#   2. llm-rubric    — a LOCAL judge (Ollama qwen3:0.6b) reads the answer against a
+#                      criterion. Honest framing: a 0.6B judge is a smoke detector,
+#                      not an examiner. It catches gross misses; it is noisy on the
+#                      margin. M12 upgrades the judge. Do not over-trust one grade.
+#
+# The tests are GENERATED from labs/opsmate/evals/golden.yaml (the single source of
+# truth) by labs/m5/make_promptfoo_tests.py, which writes generation-tests.yaml next
+# to this file. Regenerate after editing golden.yaml:
+#     uv run labs/m5/make_promptfoo_tests.py
+#
+# Run (from the labs repo root), writing machine-readable JSON the X-Ray lens reads:
+#     npx -y promptfoo@latest eval -c labs/opsmate/evals/promptfooconfig.yaml \
+#         -o labs/opsmate/evals/generation-latest.json
+#
+# The spike proved the wiring: https provider -> /ask?q={{...|urlencode}},
+# transformResponse json.answer pulls the RAG answer into the grader.
+# ============================================================================
+
+description: "OpsMate generation-layer golden eval (RAG /ask, local judge)"
+
+# The app IS the prompt: OpsMate builds the real RAG prompt server-side (system.txt
+# + retrieved context) inside /ask. promptfoo only needs to pass the question through
+# to the provider URL, so the "prompt" here is a bare passthrough of the query var.
+prompts:
+  - "{{query}}"
+
+# The system under test: the real OpsMate app, hit over HTTP exactly as a client
+# would. APP_URL defaults to the compose-published port; override in the shell to
+# point at the no-RAG baseline harness or a remote app.
+providers:
+  - id: "https"
+    label: "opsmate-rag"
+    config:
+      # The RAG answer flows in through the app's /ask. urlencode is required —
+      # questions contain spaces and punctuation (proven in the M5 spike).
+      url: "{{ env.APP_URL | default('http://localhost:8001') }}/ask?q={{query | urlencode}}"
+      method: "GET"
+      # /ask returns {query, answer, sources[]} — grade the answer text only.
+      transformResponse: "json.answer"
+
+# The local judge for every llm-rubric assertion. No cloud key: promptfoo's ollama
+# provider talks to host Ollama. think:false keeps qwen3 from emitting <think> noise
+# and keeps the grade fast on CPU.
+defaultTest:
+  options:
+    provider:
+      id: "ollama:chat:qwen3:0.6b"
+      config:
+        temperature: 0
+        think: false
+
+# Generated from golden.yaml — do not edit generation-tests.yaml by hand.
+tests: file://generation-tests.yaml

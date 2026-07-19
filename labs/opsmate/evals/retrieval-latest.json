@@ -1,0 +1,300 @@
+{
+  "layer": "retrieval",
+  "generated_at": "2026-07-19T20:51:27.996791+00:00",
+  "app_url": "http://localhost:8001",
+  "k": 3,
+  "golden": "labs/opsmate/evals/golden.yaml",
+  "passed": 24,
+  "total": 24,
+  "pct": 100.0,
+  "results": [
+    {
+      "id": "retr-payments-5xx",
+      "layer": "retrieval",
+      "expect_source": "payments-api-5xx.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "payments-api-5xx.md",
+        "payments-api-5xx.md",
+        "payments-api-5xx.md"
+      ]
+    },
+    {
+      "id": "retr-db-failover",
+      "layer": "retrieval",
+      "expect_source": "db-failover.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "db-failover.md",
+        "db-failover.md",
+        "queue-backlog.md"
+      ]
+    },
+    {
+      "id": "retr-crashloop",
+      "layer": "retrieval",
+      "expect_source": "k8s-crashloop.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "k8s-crashloop.md",
+        "k8s-crashloop.md",
+        "k8s-crashloop.md"
+      ]
+    },
+    {
+      "id": "retr-disk-pressure",
+      "layer": "retrieval",
+      "expect_source": "disk-pressure.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "disk-pressure.md",
+        "k8s-crashloop.md",
+        "dns-outage.md"
+      ]
+    },
+    {
+      "id": "retr-dns-outage",
+      "layer": "retrieval",
+      "expect_source": "dns-outage.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "dns-outage.md",
+        "dns-outage.md",
+        "vpn-access.md"
+      ]
+    },
+    {
+      "id": "retr-tls-expiry",
+      "layer": "retrieval",
+      "expect_source": "tls-cert-rotation.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "tls-cert-rotation.md",
+        "tls-cert-rotation.md",
+        "tls-cert-rotation.md"
+      ]
+    },
+    {
+      "id": "retr-queue-backlog",
+      "layer": "retrieval",
+      "expect_source": "queue-backlog.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "queue-backlog.md",
+        "queue-backlog.md",
+        "queue-backlog.md"
+      ]
+    },
+    {
+      "id": "retr-cache-stampede",
+      "layer": "retrieval",
+      "expect_source": "cache-stampede.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "cache-stampede.md",
+        "cache-stampede.md",
+        "cache-stampede.md"
+      ]
+    },
+    {
+      "id": "retr-vpn-access",
+      "layer": "retrieval",
+      "expect_source": "vpn-access.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "vpn-access.md",
+        "vpn-access.md",
+        "vpn-access.md"
+      ]
+    },
+    {
+      "id": "retr-major-incident",
+      "layer": "retrieval",
+      "expect_source": "major-incident-playbook.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "major-incident-playbook.md",
+        "major-incident-playbook.md",
+        "oncall-escalation.md"
+      ]
+    },
+    {
+      "id": "retr-capacity-review",
+      "layer": "retrieval",
+      "expect_source": "capacity-review-guide.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "capacity-review-guide.md",
+        "capacity-review-guide.md",
+        "capacity-review-guide.md"
+      ]
+    },
+    {
+      "id": "retr-backup-restore",
+      "layer": "retrieval",
+      "expect_source": "backup-restore.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "backup-restore.md",
+        "backup-restore.md",
+        "backup-restore.md"
+      ]
+    },
+    {
+      "id": "gen-payments-pool",
+      "layer": "generation",
+      "expect_source": "payments-api-5xx.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "payments-api-5xx.md",
+        "payments-api-5xx.md",
+        "payments-api-5xx.md"
+      ]
+    },
+    {
+      "id": "gen-db-failover-find-primary",
+      "layer": "generation",
+      "expect_source": "db-failover.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "db-failover.md",
+        "db-failover.md",
+        "db-failover.md"
+      ]
+    },
+    {
+      "id": "gen-crashloop-previous-logs",
+      "layer": "generation",
+      "expect_source": "k8s-crashloop.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "k8s-crashloop.md",
+        "k8s-crashloop.md",
+        "k8s-crashloop.md"
+      ]
+    },
+    {
+      "id": "gen-disk-reclaim",
+      "layer": "generation",
+      "expect_source": "disk-pressure.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "disk-pressure.md",
+        "disk-pressure.md",
+        "disk-pressure.md"
+      ]
+    },
+    {
+      "id": "gen-deploy-rollback-cmd",
+      "layer": "generation",
+      "expect_source": "deploy-rollback.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "deploy-rollback.md",
+        "dns-outage.md",
+        "deploy-rollback.md"
+      ]
+    },
+    {
+      "id": "gen-cache-stampede-fix",
+      "layer": "generation",
+      "expect_source": "cache-stampede.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "cache-stampede.md",
+        "cache-stampede.md",
+        "cache-stampede.md"
+      ]
+    },
+    {
+      "id": "gen-queue-poison",
+      "layer": "generation",
+      "expect_source": "queue-backlog.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "queue-backlog.md",
+        "queue-backlog.md",
+        "queue-backlog.md"
+      ]
+    },
+    {
+      "id": "gen-tls-renew",
+      "layer": "generation",
+      "expect_source": "tls-cert-rotation.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "tls-cert-rotation.md",
+        "tls-cert-rotation.md",
+        "tls-cert-rotation.md"
+      ]
+    },
+    {
+      "id": "gen-escalation-sev1",
+      "layer": "generation",
+      "expect_source": "oncall-escalation.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "oncall-escalation.md",
+        "oncall-escalation.md",
+        "oncall-escalation.md"
+      ]
+    },
+    {
+      "id": "gen-incident-roles",
+      "layer": "generation",
+      "expect_source": "major-incident-playbook.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "major-incident-playbook.md",
+        "major-incident-playbook.md",
+        "oncall-escalation.md"
+      ]
+    },
+    {
+      "id": "gen-backup-drill",
+      "layer": "generation",
+      "expect_source": "backup-restore.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "backup-restore.md",
+        "backup-restore.md",
+        "backup-restore.md"
+      ]
+    },
+    {
+      "id": "gen-vpn-scope",
+      "layer": "generation",
+      "expect_source": "vpn-access.md",
+      "ok": true,
+      "rank": 1,
+      "top_sources": [
+        "vpn-access.md",
+        "vpn-access.md",
+        "vpn-access.md"
+      ]
+    }
+  ]
+}

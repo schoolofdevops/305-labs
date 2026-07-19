@@ -27,7 +27,7 @@ up: preflight
 	@# fresh clone this directory is absent; some Docker setups fail to create
 	@# and chown a missing bind source, so create it ourselves (M4+ uses it).
 	@mkdir -p ./data/chroma
-	@$(COMPOSE) up -d
+	@$(COMPOSE) up -d --build
 	@echo "==> Waiting for the model service to report healthy (up to $(WAIT_SECONDS)s) ..."
 	@i=0; \
 	while [ $$i -lt $(WAIT_SECONDS) ]; do \

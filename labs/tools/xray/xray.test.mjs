@@ -160,9 +160,9 @@ async function main() {
   ok('loads: no console errors', consoleErrors.length === 0, consoleErrors.join(' | '));
   ok('loads: no page exceptions', pageErrors.length === 0, pageErrors.join(' | '));
   ok('loads: zero non-same-origin requests', externalReqs.length === 0, externalReqs.join(' | '));
-  ok('lens tabs: 1 active + 3 live lenses + 6 stubs', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
-      && await ev('document.querySelectorAll("#tabs .tab[data-lens]").length') === 3
-      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 6);
+  ok('lens tabs: 1 active + 4 live lenses + 5 stubs', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
+      && await ev('document.querySelectorAll("#tabs .tab[data-lens]").length') === 4
+      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 5);
 
   // ---------- 2. real connection state ----------
   await waitFor('document.getElementById("connInd").className === "connected"', 12000, 'conn: indicator connected');
@@ -239,6 +239,24 @@ async function main() {
   await ev('document.getElementById("ragAskBtn").click()');
   await waitFor('document.getElementById("ragAnswer").textContent.length > 40 && !document.getElementById("ragAnswer").querySelector(".dim")', 60000, 'rag: ask returns a generated answer');
   ok('rag: fed-the-answer tags mark source chunks', (await ev('document.querySelectorAll("#ragChunks .chunkCard.fed").length')) >= 1);
+
+  // ---------- 8. Evals lens (M5) — scoreboard over the real eval JSONs ----------
+  await ev('document.querySelector("#tabs .tab[data-lens=evals]").click()');
+  ok('evals: lens switches (panel visible)',
+    (await ev('document.body.classList.contains("lens-evals")')) === true
+    && (await ev('getComputedStyle(document.getElementById("evMain")).display')) === 'grid');
+  await waitFor('document.getElementById("evRet").textContent !== "—"', 10000, 'evals: retrieval score loads');
+  ok('evals: retrieval reads 24/24', (await gauge('evRet')) === '24/24', await gauge('evRet'));
+  await waitFor('document.getElementById("evV1Txt").textContent !== "—"', 10000, 'evals: v1 arm loads');
+  ok('evals: three generation arms populated',
+    /\d+\/\d+/.test(await gauge('evNoragTxt')) && /\d+\/\d+/.test(await gauge('evV1Txt')) && /\d+\/\d+/.test(await gauge('evV2Txt')),
+    `${await gauge('evNoragTxt')} | ${await gauge('evV1Txt')} | ${await gauge('evV2Txt')}`);
+  ok('evals: RAG-vs-noRAG gap computed', /[+-]\d+ pts/.test(await gauge('evGap')), await gauge('evGap'));
+  ok('evals: per-question grid rendered (15 rows)', (await ev('document.querySelectorAll("#evGrid .evQ").length')) === 15,
+    String(await ev('document.querySelectorAll("#evGrid .evQ").length')));
+  ok('evals: pass and fail dots both present', (await ev('document.querySelectorAll("#evGrid .evQ.pass").length')) >= 1
+    && (await ev('document.querySelectorAll("#evGrid .evQ.fail").length')) >= 1);
+  ok('evals: offline banner hidden with results present', !(await ev('document.getElementById("evOffline").classList.contains("show")')));
 
   // switch back for the screenshot
   await ev('document.querySelector("#tabs .tab[data-lens=tokens]").click()');

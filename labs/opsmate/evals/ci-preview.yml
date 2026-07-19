@@ -1,0 +1,29 @@
+# PREVIEW ONLY — the real gate is built in M12. This shows the SHAPE of an
+# eval gate: run both layers on every PR, fail the build if the baseline regresses.
+name: opsmate-evals
+on: [pull_request]
+
+jobs:
+  golden-set:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bring up the OpsMate stack
+        run: make -C labs/opsmate up
+      - name: Ingest the corpus
+        run: curl -s -X POST http://localhost:8001/ingest
+      - name: Retrieval layer (deterministic — the tripwire)
+        # retrieval_check.py exits non-zero if any retrieval check fails,
+        # which fails the job. This is the cheap gate that runs first.
+        run: uv run labs/m5/retrieval_check.py
+      - name: Generation layer (graded)
+        run: |
+          uv run labs/m5/make_promptfoo_tests.py
+          npx -y promptfoo@latest eval \
+            -c labs/opsmate/evals/promptfooconfig.yaml \
+            -o labs/opsmate/evals/generation-latest.json \
+            --max-concurrency 2
+      - name: Gate on the baseline
+        # Compare this run's pass rate to the committed baseline; fail if it
+        # dropped. M12 replaces this stub with a real threshold check.
+        run: uv run labs/m5/retrieval_check.py --k 3

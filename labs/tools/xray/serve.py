@@ -17,6 +17,11 @@ PORT = int(os.environ.get("PORT", "8010"))
 OLLAMA = os.environ.get("OLLAMA_HOST_URL", "http://127.0.0.1:11434").rstrip("/")
 LLAMACPP = os.environ.get("LLAMACPP_URL", "http://127.0.0.1:8080").rstrip("/")
 APP = os.environ.get("APP_URL", "http://127.0.0.1:8001").rstrip("/")
+EVALS_DIR = os.environ.get(
+    "EVALS_DIR",
+    os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  "..", "..", "opsmate", "evals")),
+)
 DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -36,10 +41,32 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return None, None
 
     def do_GET(self):
-        if self._route()[0]:
+        if self.path.startswith("/evals/"):
+            self._serve_eval_file()
+        elif self._route()[0]:
             self._proxy("GET")
         else:
             super().do_GET()
+
+    def _serve_eval_file(self):
+        # Serve eval result JSONs from the opsmate evals dir (Evals lens, M5).
+        # Filename only — no path traversal.
+        name = os.path.basename(self.path[len("/evals/"):])
+        path = os.path.join(EVALS_DIR, name)
+        if not (name.endswith(".json") and os.path.isfile(path)):
+            self.send_response(404)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(
+                {"error": f"{name} not found — run the M5 eval steps first"}).encode())
+            return
+        with open(path, "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
 
     def do_POST(self):
         if self._route()[0]:
