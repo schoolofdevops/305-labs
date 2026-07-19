@@ -1,0 +1,49 @@
+{
+  "checks": [
+    {
+      "id": "dd-ollama-reachable",
+      "describe": "Ollama is running — the deep-dive page seeds nothing persistent and relies on the host model server (state-tolerant re-check)",
+      "run": "curl -s --max-time 5 http://127.0.0.1:11434/api/version | jq -r 'if .version then \"ollama-up\" else \"ollama-down\" end'",
+      "assert": {
+        "contains": "ollama-up"
+      },
+      "weight": 1
+    },
+    {
+      "id": "dd-decode-stays-steady",
+      "describe": "a long answer reports a positive, finite TPOT — the KV cache keeps decode at a steady rhythm (section 1). Asserts the shape 'a real per-token time', never a run-specific value",
+      "run": "curl -s --max-time 90 http://127.0.0.1:11434/api/generate -d '{\"model\":\"qwen3:0.6b\",\"prompt\":\"List, one short line each, ten things a readiness probe checks. /no_think\",\"stream\":false,\"think\":false}' | jq -r 'if (.eval_count > 20 and .eval_duration > 0) then \"decode-steady\" else \"decode-odd\" end'",
+      "assert": {
+        "contains": "decode-steady"
+      },
+      "weight": 2
+    },
+    {
+      "id": "dd-greedy-is-locally-deterministic",
+      "describe": "two greedy (temperature 0, fixed seed) requests on this one engine return byte-identical text — greedy is deterministic within one engine/build (section 2). Self-contained; compares two live responses, asserts they matched",
+      "run": "R1=$(curl -s --max-time 60 http://127.0.0.1:11434/api/generate -d '{\"model\":\"qwen3:0.6b\",\"prompt\":\"Name one benefit of a rolling update. One short sentence. /no_think\",\"stream\":false,\"think\":false,\"options\":{\"temperature\":0,\"seed\":42}}' | jq -r '.response'); R2=$(curl -s --max-time 60 http://127.0.0.1:11434/api/generate -d '{\"model\":\"qwen3:0.6b\",\"prompt\":\"Name one benefit of a rolling update. One short sentence. /no_think\",\"stream\":false,\"think\":false,\"options\":{\"temperature\":0,\"seed\":42}}' | jq -r '.response'); if [ \"$R1\" = \"$R2\" ]; then echo greedy-deterministic; else echo greedy-diverged; fi",
+      "assert": {
+        "contains": "greedy-deterministic"
+      },
+      "weight": 3
+    },
+    {
+      "id": "dd-chat-template-has-role-markers",
+      "describe": "the course model's chat template exposes the Qwen im_start/im_end role markers — the hidden contract every message is wrapped in (section 3)",
+      "run": "ollama show --template qwen3:0.6b 2>/dev/null | grep -c 'im_start' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo template-has-markers; else echo template-no-markers; fi'",
+      "assert": {
+        "contains": "template-has-markers"
+      },
+      "weight": 2
+    },
+    {
+      "id": "dd-thinking-emits-reasoning-field",
+      "describe": "with think:true the response carries a non-empty thinking field while the visible answer stays short — thinking is extra decode tokens toggled by the template (section 4). Asserts presence, not a specific length",
+      "run": "curl -s --max-time 90 http://127.0.0.1:11434/api/generate -d '{\"model\":\"qwen3:0.6b\",\"prompt\":\"Is 17 a prime number? Answer yes or no.\",\"stream\":false,\"think\":true}' | jq -r 'if ((.thinking | length) > 0 and .eval_count > 20) then \"thinking-present\" else \"thinking-absent\" end'",
+      "assert": {
+        "contains": "thinking-present"
+      },
+      "weight": 2
+    }
+  ]
+}

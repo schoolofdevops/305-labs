@@ -1,0 +1,85 @@
+{
+  "checks": [
+    {
+      "id": "ollama-reachable",
+      "describe": "Ollama is running on the host and answers /api/version — the model server the whole lab depends on",
+      "run": "curl -s --max-time 5 http://127.0.0.1:11434/api/version | jq -r 'if .version then \"ollama-up\" else \"ollama-down\" end'",
+      "assert": {
+        "contains": "ollama-up"
+      },
+      "weight": 1
+    },
+    {
+      "id": "course-model-pulled",
+      "describe": "the course model qwen3:0.6b is pulled and listed by Ollama",
+      "run": "ollama list | grep -c 'qwen3:0.6b' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo model-present; else echo model-missing; fi'",
+      "assert": {
+        "contains": "model-present"
+      },
+      "weight": 2
+    },
+    {
+      "id": "tokenizer-fetchable-and-nonempty",
+      "describe": "the Qwen3 tokenizer.json is fetchable from Hugging Face and is a non-trivial file (self-seeds into a temp path, then removes it)",
+      "run": "T=$(mktemp); curl -sL --max-time 60 -o \"$T\" https://huggingface.co/Qwen/Qwen3-0.6B/resolve/main/tokenizer.json; SZ=$(wc -c < \"$T\"); rm -f \"$T\"; if [ \"$SZ\" -gt 100000 ]; then echo tokenizer-ok; else echo tokenizer-small; fi",
+      "assert": {
+        "contains": "tokenizer-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "tokenizer-playground-runs",
+      "describe": "the tokenizer playground runs end to end and prints both the token-count table and the KV-cache table (self-seeds tokenizer.json next to the script, leaves it in place for the learner)",
+      "run": "cd labs/m1 && { [ -f tokenizer.json ] || curl -sL --max-time 60 -o tokenizer.json https://huggingface.co/Qwen/Qwen3-0.6B/resolve/main/tokenizer.json; }; uv run --with tokenizers tokens.py 2>&1 | grep -E 'Token counts|KV-cache memory|bytes/token' | wc -l | xargs -I{} sh -c 'if [ {} -ge 3 ]; then echo playground-ok; else echo playground-incomplete; fi'",
+      "assert": {
+        "contains": "playground-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "openai-contract-answers",
+      "describe": "the OpenAI-compatible /v1/chat/completions endpoint returns a non-empty assistant message — the course-long API contract works on the learner's endpoint (self-contained request)",
+      "run": "curl -s --max-time 60 http://127.0.0.1:11434/v1/chat/completions -H 'Content-Type: application/json' -d '{\"model\":\"qwen3:0.6b\",\"stream\":false,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with the single word ok. /no_think\"}]}' | jq -r '.choices[0].message.content | if (. | length) > 0 then \"contract-ok\" else \"contract-empty\" end'",
+      "assert": {
+        "contains": "contract-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "prefill-decode-metrics-present",
+      "describe": "the /api/generate response carries the per-phase timing fields the lab instruments (prompt_eval_count/duration for prefill, eval_count/duration for decode) — the instrument itself is live",
+      "run": "curl -s --max-time 60 http://127.0.0.1:11434/api/generate -d '{\"model\":\"qwen3:0.6b\",\"prompt\":\"Say hello. /no_think\",\"stream\":false,\"think\":false}' | jq -r 'if (.prompt_eval_count != null and .prompt_eval_duration != null and .eval_count != null and .eval_duration != null) then \"metrics-present\" else \"metrics-missing\" end'",
+      "assert": {
+        "contains": "metrics-present"
+      },
+      "weight": 3
+    },
+    {
+      "id": "prefill-heavy-run-is-prefill-dominated",
+      "describe": "a long-prompt one-word-answer request spends the dominant share of its time in prefill (prefill duration exceeds decode duration) — the prefill-heavy contrast run behaves as designed (self-contained, no run-specific number asserted)",
+      "run": "P=$(printf 'Runbook step: drain traffic, scale the deployment to zero, wait for pods to terminate, then scale back up and verify health. %.0s' $(seq 1 8)); curl -s --max-time 90 http://127.0.0.1:11434/api/generate -d \"{\\\"model\\\":\\\"qwen3:0.6b\\\",\\\"prompt\\\":\\\"${P} Based only on the runbook, answer in ONE word: what do you scale to first? /no_think\\\",\\\"stream\\\":false,\\\"think\\\":false}\" | jq -r 'if (.prompt_eval_duration > .eval_duration) then \"prefill-dominates\" else \"decode-dominates\" end'",
+      "assert": {
+        "contains": "prefill-dominates"
+      },
+      "weight": 3
+    },
+    {
+      "id": "thinking-mode-costs-more-tokens",
+      "describe": "with thinking on, the same one-word question generates strictly more output tokens than with thinking off — the cost-of-reasoning exhibit is reproducible (self-contained; asserts the shape 'more', never a specific count)",
+      "run": "OFF=$(curl -s --max-time 60 http://127.0.0.1:11434/api/generate -d '{\"model\":\"qwen3:0.6b\",\"prompt\":\"What colour is a clear daytime sky? Answer in one word.\",\"stream\":false,\"think\":false}' | jq '.eval_count'); ON=$(curl -s --max-time 90 http://127.0.0.1:11434/api/generate -d '{\"model\":\"qwen3:0.6b\",\"prompt\":\"What colour is a clear daytime sky? Answer in one word.\",\"stream\":false,\"think\":true}' | jq '.eval_count'); if [ \"$ON\" -gt \"$OFF\" ]; then echo thinking-costs-more; else echo thinking-not-more; fi",
+      "assert": {
+        "contains": "thinking-costs-more"
+      },
+      "weight": 2
+    },
+    {
+      "id": "xray-tokens-lens-serves",
+      "describe": "the X-Ray Tokens lens serves its page locally with a same-origin Ollama proxy (self-seeds: starts serve.py in the background on a spare port, curls the root, then stops it)",
+      "run": "PORT=8017 python3 labs/tools/xray/serve.py >/tmp/m1-xray.log 2>&1 & SP=$!; for i in $(seq 1 20); do curl -s --max-time 2 http://127.0.0.1:8017/ >/dev/null 2>&1 && break; sleep 0.5; done; BODY=$(curl -s --max-time 5 http://127.0.0.1:8017/ 2>/dev/null); kill $SP 2>/dev/null; echo \"$BODY\" | grep -qi 'x-ray' && echo xray-serves || echo xray-nofile",
+      "assert": {
+        "contains": "xray-serves"
+      },
+      "weight": 2
+    }
+  ]
+}

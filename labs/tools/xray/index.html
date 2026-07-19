@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM Stack X-Ray</title>
+<style>
+  :root{
+    --bg:#0d1220; --panel:#151c2e; --panel2:#111827; --line:#26324e; --line2:#1c2740;
+    --txt:#dbe4f5; --dim:#8494b3; --faint:#5a6a8c;
+    --accent:#4cc9f0; --accent2:#7b6cf6;
+    --ok:#3ddc97; --warn:#f5b942; --bad:#ff6b6b;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{font-size:clamp(10.5px,0.4vw + 9.1px,16px)}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);
+    font:1rem/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    overflow:hidden}
+  #app{display:flex;flex-direction:column;height:100%;padding:8px 10px;gap:6px}
+
+  /* ---------- header ---------- */
+  header{display:flex;align-items:center;gap:12px;flex:0 0 auto;flex-wrap:wrap}
+  header h1{font-size:1.05rem;font-weight:650;letter-spacing:.2px;white-space:nowrap}
+  header h1 .llm{color:var(--accent)}
+  header h1 .lens{color:var(--accent2);font-weight:600}
+  #tabs{display:flex;gap:4px;flex-wrap:wrap}
+  .tab{font-size:.8rem;padding:3px 10px;border-radius:7px;border:1px solid var(--line);
+    color:var(--dim);background:none;white-space:nowrap}
+  .tab.active{border-color:var(--accent);color:var(--accent);background:rgba(76,201,240,.08)}
+  .tab.stub{opacity:.45;cursor:not-allowed}
+  .tab.stub small{color:var(--faint);font-size:.68rem;margin-left:4px}
+  #hdrRight{display:flex;align-items:center;gap:10px;margin-left:auto;font-family:var(--mono);font-size:.8rem;color:var(--faint)}
+  #connInd{display:flex;align-items:center;gap:6px;padding:2px 9px;border-radius:9px;border:1px solid var(--line)}
+  #connInd .wdot{width:.55rem;height:.55rem;border-radius:50%;background:var(--faint)}
+  #connInd.connected .wdot{background:var(--ok)}
+  #connInd.connected{color:var(--ok);border-color:rgba(61,220,151,.4)}
+  #connInd.down .wdot{background:var(--bad);animation:blink .8s infinite}
+  #connInd.down{color:var(--bad);border-color:rgba(255,107,107,.4)}
+  @keyframes blink{50%{opacity:.3}}
+
+  /* ---------- toolbar ---------- */
+  #bar{flex:0 0 auto;display:flex;align-items:center;gap:10px;
+    background:linear-gradient(90deg,rgba(123,108,246,.14),rgba(76,201,240,.07));
+    border:1px solid #3a3f6e;border-radius:8px;padding:4px 11px;min-height:32px;flex-wrap:wrap}
+  #bar .tag{font-size:.8rem;font-weight:700;letter-spacing:.8px;color:var(--accent2);
+    text-transform:uppercase;white-space:nowrap}
+  #modelSel{font-family:var(--mono);font-size:.88rem;background:var(--panel2);color:var(--txt);
+    border:1px solid var(--line);border-radius:6px;padding:3px 8px;min-width:11rem}
+  #thinkWrap{display:flex;align-items:center;gap:5px;font-size:.82rem;color:var(--dim);white-space:nowrap}
+  #thinkWrap input{accent-color:var(--accent2)}
+  #barHint{flex:1;color:var(--dim);font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:12rem}
+  #barHint code{font-family:var(--mono);font-size:.84rem;color:var(--accent);background:rgba(76,201,240,.08);padding:0 4px;border-radius:4px}
+
+  /* ---------- offline banner ---------- */
+  #offline{display:none;border:1px dashed rgba(255,107,107,.5);border-radius:9px;padding:10px 12px;
+    color:var(--bad);font-size:.9rem;line-height:1.5;background:rgba(255,107,107,.06)}
+  #offline.show{display:block}
+  #offline code{font-family:var(--mono);font-size:.84rem;color:var(--txt);background:rgba(255,255,255,.06);padding:0 4px;border-radius:4px}
+
+  /* ---------- main grid ---------- */
+  #main{flex:1 1 auto;display:grid;grid-template-columns:clamp(250px,23rem,370px) 1fr;gap:6px;min-height:0}
+  .panel{background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:7px 10px;min-height:0}
+  .panel h2{font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+
+  #left{display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto;scrollbar-width:thin}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:2px 0;border-bottom:1px dashed var(--line2)}
+  .row:last-child{border-bottom:none}
+  .row .lbl{color:var(--dim);font-family:var(--mono);font-size:.82rem}
+  .row .val{font-family:var(--mono);font-size:.92rem;font-weight:600;padding:1px 7px;border-radius:5px;transition:background .3s}
+  .row .val.flash{animation:flash 1.1s ease-out}
+  @keyframes flash{0%{background:rgba(245,185,66,.55)}100%{background:transparent}}
+  .row .val.hot{color:var(--accent)}
+  .row .sub{color:var(--faint);font-size:.68rem;margin-left:6px;font-weight:400}
+
+  /* phase bar */
+  #phaseBar{height:1.1rem;border-radius:6px;overflow:hidden;display:flex;border:1px solid var(--line);margin:4px 0 2px}
+  #phasePrefill{background:linear-gradient(90deg,#7b6cf6,#5a4fd0);min-width:2px;transition:width .5s}
+  #phaseDecode{background:linear-gradient(90deg,#2e9ec4,#4cc9f0);min-width:2px;transition:width .5s}
+  #phaseLegend{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.7rem;color:var(--faint)}
+  #phaseLegend .pf{color:var(--accent2)} #phaseLegend .dc{color:var(--accent)}
+
+  /* context bar */
+  #ctxBar{height:.85rem;border-radius:6px;overflow:hidden;background:#0e1526;border:1px solid var(--line);margin:4px 0 2px}
+  #ctxFill{height:100%;width:0%;background:linear-gradient(90deg,#3ddc97,#f5b942);transition:width .5s}
+  #ctxNote{font-family:var(--mono);font-size:.7rem;color:var(--faint)}
+
+  /* ---------- right column ---------- */
+  #right{display:flex;flex-direction:column;gap:6px;min-height:0}
+  #promptPanel{flex:0 0 auto}
+  #presets{display:flex;gap:6px;margin-bottom:5px;flex-wrap:wrap}
+  .preset{font-size:.76rem;padding:2px 9px;border-radius:7px;border:1px solid var(--line);
+    color:var(--dim);background:none;cursor:pointer;white-space:nowrap}
+  .preset:hover{border-color:var(--accent2);color:var(--accent2)}
+  #promptRow{display:flex;gap:6px;align-items:stretch}
+  #prompt{flex:1;font-family:var(--mono);font-size:.86rem;background:var(--panel2);color:var(--txt);
+    border:1px solid var(--line);border-radius:7px;padding:6px 8px;resize:vertical;min-height:3.4rem;max-height:9rem}
+  #sendBtn,#stopBtn{font-size:.86rem;font-weight:600;padding:0 14px;border-radius:7px;border:1px solid var(--accent);
+    color:var(--accent);background:rgba(76,201,240,.08);cursor:pointer;white-space:nowrap}
+  #sendBtn:disabled{opacity:.4;cursor:not-allowed}
+  #stopBtn{border-color:var(--bad);color:var(--bad);background:rgba(255,107,107,.07);display:none}
+
+  #streamPanel{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+  #streamPanel h2 span{letter-spacing:0;text-transform:none;color:var(--faint)}
+  #streamOut{flex:1;overflow-y:auto;font-family:var(--mono);font-size:.9rem;line-height:1.65;
+    white-space:pre-wrap;word-break:break-word;scrollbar-width:thin;color:var(--txt);padding:2px 2px}
+  #streamOut .cursor{display:inline-block;width:.55em;height:1em;background:var(--accent);
+    vertical-align:-2px;animation:blink .7s infinite}
+  #streamOut .think{color:var(--faint);font-style:italic}
+  #streamEmpty{color:var(--faint);font-size:.84rem;font-family:var(--mono)}
+
+  /* event log */
+  #events{flex:0 0 clamp(100px,8.5rem,150px);display:flex;flex-direction:column;min-height:0}
+  #evList{flex:1;overflow-y:auto;font-family:var(--mono);font-size:.8rem;line-height:1.7;scrollbar-width:thin}
+  .ev{display:flex;gap:8px;white-space:nowrap;overflow:hidden}
+  .ev .et{color:var(--faint);flex:0 0 3.4rem}
+  .ev .er{flex:0 0 7.5rem;overflow:hidden;text-overflow:ellipsis;color:var(--ok)}
+  .ev.warn .er{color:var(--warn)}
+  .ev.err .er{color:var(--bad)}
+  .ev .em{flex:1;color:var(--txt);opacity:.85;overflow:hidden;text-overflow:ellipsis}
+  .ev.new{animation:evin .4s ease-out}
+  @keyframes evin{0%{background:rgba(76,201,240,.12)}100%{background:transparent}}
+  #evEmpty{color:var(--faint);font-size:.8rem;font-family:var(--mono)}
+
+  footer{flex:0 0 auto;font-size:.72rem;color:var(--faint);font-family:var(--mono);
+    display:flex;gap:14px;flex-wrap:wrap}
+  footer b{color:var(--dim);font-weight:600}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>LLM <span class="llm">Stack X-Ray</span> · <span class="lens" id="lensName">Tokens lens</span></h1>
+    <div id="tabs">
+      <button class="tab active" data-lens="tokens">Tokens</button>
+      <button class="tab stub" title="lands with M3">Engine<small>M3</small></button>
+      <button class="tab stub" title="lands with M4">RAG<small>M4</small></button>
+      <button class="tab stub" title="lands with M5">Evals<small>M5</small></button>
+      <button class="tab stub" title="lands with M6">Train<small>M6</small></button>
+      <button class="tab stub" title="lands with M7">Artifacts<small>M7</small></button>
+      <button class="tab stub" title="lands with M8">K8s<small>M8</small></button>
+      <button class="tab stub" title="lands with M10">Traces<small>M10</small></button>
+      <button class="tab stub" title="lands with M12">Spend<small>M12</small></button>
+    </div>
+    <div id="hdrRight">
+      <span id="verInfo">ollama —</span>
+      <span id="connInd"><span class="wdot"></span><span id="connTxt">connecting…</span></span>
+    </div>
+  </header>
+
+  <div id="bar">
+    <span class="tag">Tokens</span>
+    <select id="modelSel"><option>loading…</option></select>
+    <label id="thinkWrap"><input type="checkbox" id="thinkChk"> thinking mode</label>
+    <span id="barHint">Watch one request split into <code>prefill</code> (whole prompt, one pass) and <code>decode</code> (one token at a time) — on your real model.</span>
+  </div>
+
+  <div id="offline">
+    Ollama is not reachable through the proxy. Start it (<code>ollama serve</code> or the desktop app),
+    check <code>OLLAMA_HOST_URL</code> if it listens elsewhere, then reload this page.
+    The X-Ray reads your real endpoint — there is nothing to show without it.
+  </div>
+
+  <div id="main">
+    <div id="left">
+      <div class="panel">
+        <h2>Latency — this request</h2>
+        <div class="row"><span class="lbl">TTFT (client)</span><span><span class="val" id="ttftC">—</span></span></div>
+        <div class="row"><span class="lbl">TTFT (server)<span class="sub">load+prefill</span></span><span><span class="val" id="ttftS">—</span></span></div>
+        <div class="row"><span class="lbl">TPOT</span><span><span class="val" id="tpot">—</span></span></div>
+        <div class="row"><span class="lbl">tok/s (decode)</span><span><span class="val hot" id="toks">—</span></span></div>
+        <div class="row"><span class="lbl">total</span><span><span class="val" id="totalMs">—</span></span></div>
+      </div>
+      <div class="panel">
+        <h2>Phase split — where the time went</h2>
+        <div id="phaseBar"><div id="phasePrefill" style="width:0%"></div><div id="phaseDecode" style="width:0%"></div></div>
+        <div id="phaseLegend"><span class="pf">■ prefill <span id="pfMs">—</span></span><span class="dc">■ decode <span id="dcMs">—</span></span></div>
+      </div>
+      <div class="panel">
+        <h2>Tokens — this request</h2>
+        <div class="row"><span class="lbl">prompt tokens</span><span><span class="val" id="pTok">—</span></span></div>
+        <div class="row"><span class="lbl">output tokens</span><span><span class="val" id="oTok">—</span></span></div>
+        <div class="row"><span class="lbl">prefill time</span><span><span class="val" id="pfDur">—</span></span></div>
+        <div class="row"><span class="lbl">decode time</span><span><span class="val" id="dcDur">—</span></span></div>
+        <div class="row"><span class="lbl">model load</span><span><span class="val" id="ldDur">—</span></span></div>
+      </div>
+      <div class="panel">
+        <h2>Context window</h2>
+        <div id="ctxBar"><div id="ctxFill"></div></div>
+        <div id="ctxNote">— / — tokens used (prompt + output vs num_ctx)</div>
+      </div>
+    </div>
+
+    <div id="right">
+      <div class="panel" id="promptPanel">
+        <h2>Prompt</h2>
+        <div id="presets">
+          <button class="preset" id="presetPf">prefill-heavy (long prompt · one-word answer)</button>
+          <button class="preset" id="presetDc">decode-heavy (short prompt · long answer)</button>
+        </div>
+        <div id="promptRow">
+          <textarea id="prompt" placeholder="Ask your model something…"></textarea>
+          <button id="sendBtn">Send</button>
+          <button id="stopBtn">Stop</button>
+        </div>
+      </div>
+      <div class="panel" id="streamPanel">
+        <h2>Token stream <span id="streamMeta"></span></h2>
+        <div id="streamOut"><span id="streamEmpty">Send a prompt — every token appears here the moment your model emits it.</span></div>
+      </div>
+      <div class="panel" id="events">
+        <h2>Request log</h2>
+        <div id="evList"><span id="evEmpty">no requests yet</span></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span><b>reading:</b> your real Ollama via same-origin proxy <code>/ollama/*</code></span>
+    <span><b>TTFT</b> time to first token · <b>TPOT</b> time per output token</span>
+    <span><b>honest note:</b> server timings come from Ollama's own response metrics; client TTFT includes network+proxy (~ms on localhost)</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const fmtMs = v => v == null ? "—" : (v >= 1000 ? (v/1000).toFixed(2) + " s" : Math.round(v) + " ms");
+  const NUM_CTX = 4096; // ollama default for these labs; the lab explains how to change it
+
+  let abortCtl = null;
+  let evCount = 0;
+
+  function logEv(kind, msg, cls) {
+    const list = $("evList");
+    const empty = $("evEmpty");
+    if (empty) empty.remove();
+    const t = new Date().toTimeString().slice(0, 8);
+    const div = document.createElement("div");
+    div.className = "ev new" + (cls ? " " + cls : "");
+    div.innerHTML = `<span class="et">${t}</span><span class="er">${kind}</span><span class="em"></span>`;
+    div.querySelector(".em").textContent = msg;
+    list.prepend(div);
+    if (++evCount > 60) list.lastElementChild?.remove();
+  }
+
+  /* ---------- connection + models (polled, not streamed) ---------- */
+  async function poll() {
+    try {
+      const v = await (await fetch("/ollama/api/version")).json();
+      if (v.error) throw new Error(v.error);
+      $("verInfo").textContent = "ollama " + v.version;
+      $("connInd").className = "connected";
+      $("connTxt").textContent = "connected";
+      $("offline").classList.remove("show");
+      const tags = await (await fetch("/ollama/api/tags")).json();
+      const sel = $("modelSel");
+      const cur = sel.value;
+      const names = (tags.models || []).map(m => m.name);
+      if (names.join() !== [...sel.options].map(o => o.value).join()) {
+        sel.innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join("") || "<option>no models — ollama pull qwen3:0.6b</option>";
+        const want = names.includes(cur) ? cur : (names.find(n => n.startsWith("qwen3:0.6b")) || names[0] || "");
+        if (want) sel.value = want;
+      }
+    } catch (e) {
+      $("connInd").className = "down";
+      $("connTxt").textContent = "ollama down";
+      $("verInfo").textContent = "ollama —";
+      $("offline").classList.add("show");
+    }
+  }
+  poll();
+  setInterval(poll, 10000);
+
+  /* ---------- gauges ---------- */
+  function setVal(id, text) {
+    const el = $(id);
+    if (el.textContent !== text) { el.textContent = text; el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
+  }
+  function resetGauges() {
+    ["ttftC","ttftS","tpot","toks","totalMs","pTok","oTok","pfDur","dcDur","ldDur"].forEach(id => $(id).textContent = "—");
+    $("phasePrefill").style.width = "0%"; $("phaseDecode").style.width = "0%";
+    $("pfMs").textContent = "—"; $("dcMs").textContent = "—";
+    $("ctxFill").style.width = "0%";
+    $("ctxNote").textContent = "— / — tokens used (prompt + output vs num_ctx)";
+  }
+
+  function applyFinal(m) {
+    const ns = v => (v || 0) / 1e6; // ns → ms
+    const pf = ns(m.prompt_eval_duration), dc = ns(m.eval_duration), ld = ns(m.load_duration);
+    const total = ns(m.total_duration);
+    setVal("ttftS", fmtMs(ld + pf));
+    setVal("pfDur", fmtMs(pf));
+    setVal("dcDur", fmtMs(dc));
+    setVal("ldDur", fmtMs(ld));
+    setVal("totalMs", fmtMs(total));
+    setVal("pTok", String(m.prompt_eval_count ?? "—"));
+    setVal("oTok", String(m.eval_count ?? "—"));
+    if (m.eval_count) {
+      setVal("tpot", (dc / m.eval_count).toFixed(1) + " ms");
+      setVal("toks", (m.eval_count / (dc / 1000)).toFixed(1));
+    }
+    const span = pf + dc;
+    if (span > 0) {
+      $("phasePrefill").style.width = (pf / span * 100).toFixed(1) + "%";
+      $("phaseDecode").style.width = (dc / span * 100).toFixed(1) + "%";
+      $("pfMs").textContent = fmtMs(pf);
+      $("dcMs").textContent = fmtMs(dc);
+    }
+    const used = (m.prompt_eval_count || 0) + (m.eval_count || 0);
+    $("ctxFill").style.width = Math.min(100, used / NUM_CTX * 100).toFixed(1) + "%";
+    $("ctxNote").textContent = `${used} / ${NUM_CTX} tokens used (prompt + output vs num_ctx)`;
+  }
+
+  /* ---------- send / stream ---------- */
+  async function send() {
+    const promptText = $("prompt").value.trim();
+    if (!promptText) return;
+    const model = $("modelSel").value;
+    const think = $("thinkChk").checked;
+    resetGauges();
+    const out = $("streamOut");
+    out.innerHTML = '<span class="cursor"></span>';
+    $("streamMeta").textContent = "· " + model + (think ? " · thinking on" : " · thinking off");
+    $("sendBtn").disabled = true;
+    $("stopBtn").style.display = "";
+    logEv("request", `${model} · ${promptText.length} chars · thinking ${think ? "on" : "off"}`);
+
+    abortCtl = new AbortController();
+    const t0 = performance.now();
+    let firstTok = null, tokens = 0, buf = "";
+
+    try {
+      const resp = await fetch("/ollama/api/generate", {
+        method: "POST",
+        signal: abortCtl.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, prompt: promptText, stream: true, think }),
+      });
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let pending = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        pending += dec.decode(value, { stream: true });
+        const lines = pending.split("\n");
+        pending = lines.pop();
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let j;
+          try { j = JSON.parse(line); } catch { continue; }
+          if (j.error) throw new Error(j.error);
+          const piece = j.response ?? "";
+          const thinkPiece = j.thinking ?? "";
+          if ((piece || thinkPiece) && firstTok == null) {
+            firstTok = performance.now() - t0;
+            setVal("ttftC", fmtMs(firstTok));
+            logEv("first-token", fmtMs(firstTok) + " after send", "warn");
+          }
+          if (thinkPiece) {
+            buf += "";
+            const cur = out.querySelector(".cursor");
+            const span = document.createElement("span");
+            span.className = "think";
+            span.textContent = thinkPiece;
+            out.insertBefore(span, cur);
+          }
+          if (piece) {
+            tokens++;
+            const cur = out.querySelector(".cursor");
+            out.insertBefore(document.createTextNode(piece), cur);
+          }
+          if (j.done) {
+            applyFinal(j);
+            logEv("done", `${j.eval_count ?? tokens} tokens · prefill ${fmtMs((j.prompt_eval_duration||0)/1e6)} · decode ${fmtMs((j.eval_duration||0)/1e6)}`);
+          }
+          out.scrollTop = out.scrollHeight;
+        }
+      }
+    } catch (e) {
+      if (e.name === "AbortError") logEv("stopped", "stream aborted by you", "warn");
+      else { logEv("error", String(e.message || e), "err"); $("offline").classList.toggle("show", /unreachable|fetch/i.test(String(e))); }
+    } finally {
+      out.querySelector(".cursor")?.remove();
+      if (!out.textContent.trim()) out.innerHTML = '<span id="streamEmpty">no output — check the request log</span>';
+      $("sendBtn").disabled = false;
+      $("stopBtn").style.display = "none";
+      abortCtl = null;
+    }
+  }
+
+  $("sendBtn").addEventListener("click", send);
+  $("stopBtn").addEventListener("click", () => abortCtl?.abort());
+  $("prompt").addEventListener("keydown", e => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
+  });
+
+  /* ---------- presets: the two contrasting experiments from the lab ---------- */
+  const RUNBOOK = "You are reading an operations runbook. Service: payments-api. On elevated 5xx: check the upstream database connection pool first; a saturated pool shows as rising p99 latency before errors. Restart is a last resort — drain traffic at the load balancer, verify health checks pass, then re-admit. Capacity notes: each replica handles roughly two hundred concurrent requests; autoscaling adds a replica when queue depth stays above fifty for one minute. Deployment history: the last three incidents were caused by config changes, not code. Postmortem actions: add a canary stage, alert on pool saturation, document the drain procedure. ".repeat(4);
+  $("presetPf").addEventListener("click", () => {
+    $("prompt").value = RUNBOOK + "\n\nAnswer in exactly one word: what should you check first on elevated 5xx?";
+  });
+  $("presetDc").addEventListener("click", () => {
+    $("prompt").value = "Explain in about 150 words what a database connection pool does.";
+  });
+})();
+</script>
+</body>
+</html>
