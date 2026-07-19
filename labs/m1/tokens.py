@@ -41,9 +41,9 @@ TOKENIZER_PATH = os.path.join(HERE, "tokenizer.json")
 # The point is not translation accuracy — it is that the tokenizer splits each
 # differently, so each costs a different number of tokens.
 SAMPLES = {
-    "english": "Restart the payment service and check the pod is running.",
-    "hindi": "पेमेंट सेवा को फिर से चालू करो और पॉड चल रहा है यह देखो।",
-    "code": 'kubectl rollout restart deployment/payments -n prod && kubectl get pods -l app=payments',
+    "english": "Why is my internet disconnecting repeatedly?",
+    "hindi": "मेरा इंटरनेट बार-बार डिस्कनेक्ट क्यों हो रहा है?",
+    "code": 'for f in glob.glob("*.log"): process(f, retry=True)',
 }
 
 
