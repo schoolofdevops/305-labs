@@ -160,9 +160,9 @@ async function main() {
   ok('loads: no console errors', consoleErrors.length === 0, consoleErrors.join(' | '));
   ok('loads: no page exceptions', pageErrors.length === 0, pageErrors.join(' | '));
   ok('loads: zero non-same-origin requests', externalReqs.length === 0, externalReqs.join(' | '));
-  ok('lens tabs: 1 active + 2 live lenses + 7 stubs', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
-      && await ev('document.querySelectorAll("#tabs .tab[data-lens]").length') === 2
-      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 7);
+  ok('lens tabs: 1 active + 3 live lenses + 6 stubs', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
+      && await ev('document.querySelectorAll("#tabs .tab[data-lens]").length') === 3
+      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 6);
 
   // ---------- 2. real connection state ----------
   await waitFor('document.getElementById("connInd").className === "connected"', 12000, 'conn: indicator connected');
@@ -223,9 +223,26 @@ async function main() {
   ok('engine: decode-rate gauge shows tok/s', /tok\/s/.test(await gauge('egRate')), await gauge('egRate'));
   ok('engine: engine log has entries', (await ev('document.querySelectorAll("#engEvList .ev").length')) >= 1);
   ok('engine: chart polyline rendered', (await ev('document.querySelectorAll("#engChart polyline").length')) >= 1);
+  // ---------- 7. RAG lens (M4) — live vs the real OpsMate app ----------
+  await ev('document.querySelector("#tabs .tab[data-lens=rag]").click()');
+  ok('rag: lens switches (panel visible)',
+    (await ev('document.body.classList.contains("lens-rag")')) === true
+    && (await ev('getComputedStyle(document.getElementById("ragMain")).display')) === 'grid');
+  await ev('document.getElementById("ragQ").value = "website throwing 500 errors"');
+  await ev('document.getElementById("ragRetBtn").click()');
+  await waitFor('document.querySelectorAll("#ragChunks .chunkCard").length > 0', 15000, 'rag: retrieve renders chunk cards');
+  ok('rag: offline banner hidden with app up', !(await ev('document.getElementById("ragOffline").classList.contains("show")')));
+  ok('rag: chunk cards show source + distance',
+    (await ev('document.querySelector("#ragChunks .chunkCard .src").textContent')).includes('.md')
+    && /^0\.\d{3}$/.test(await ev('document.querySelector("#ragChunks .chunkCard .dist, #ragChunks .chunkCard .dist.good").textContent')));
+  ok('rag: top hit is the 5xx runbook', (await ev('document.querySelector("#ragChunks .chunkCard .src").textContent')).includes('payments-api-5xx'));
+  await ev('document.getElementById("ragAskBtn").click()');
+  await waitFor('document.getElementById("ragAnswer").textContent.length > 40 && !document.getElementById("ragAnswer").querySelector(".dim")', 60000, 'rag: ask returns a generated answer');
+  ok('rag: fed-the-answer tags mark source chunks', (await ev('document.querySelectorAll("#ragChunks .chunkCard.fed").length')) >= 1);
+
   // switch back for the screenshot
   await ev('document.querySelector("#tabs .tab[data-lens=tokens]").click()');
-  ok('engine: switch back to Tokens works', (await ev('document.body.className')) === '');
+  ok('lens: switch back to Tokens works', (await ev('document.body.className')) === '');
 
   // ---------- screenshot for the evidence file ----------
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });

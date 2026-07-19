@@ -127,6 +127,42 @@
     display:flex;gap:14px;flex-wrap:wrap}
   footer b{color:var(--dim);font-weight:600}
 
+  /* ---------- rag lens (M4) ---------- */
+  body.lens-rag #main,body.lens-rag #bar,body.lens-rag #engMain{display:none}
+  #ragMain{display:none;flex:1 1 auto;min-height:0;grid-template-columns:1fr clamp(280px,26rem,420px);gap:6px}
+  body.lens-rag #ragMain{display:grid}
+  #ragLeft{display:flex;flex-direction:column;gap:6px;min-height:0}
+  #ragOffline{display:none;border:1px dashed rgba(245,185,66,.5);border-radius:9px;padding:10px 12px;
+    color:var(--warn);font-size:.9rem;line-height:1.5;background:rgba(245,185,66,.06)}
+  #ragOffline.show{display:block}
+  #ragOffline code{font-family:var(--mono);font-size:.84rem;color:var(--txt);background:rgba(255,255,255,.06);padding:0 4px;border-radius:4px}
+  #ragQRow{display:flex;gap:6px}
+  #ragQ{flex:1;font-family:var(--mono);font-size:.88rem;background:var(--panel2);color:var(--txt);
+    border:1px solid var(--line);border-radius:7px;padding:6px 8px}
+  #ragRetBtn,#ragAskBtn{font-size:.84rem;font-weight:600;padding:0 12px;border-radius:7px;border:1px solid var(--accent);
+    color:var(--accent);background:rgba(76,201,240,.08);cursor:pointer;white-space:nowrap}
+  #ragAskBtn{border-color:var(--accent2);color:var(--accent2);background:rgba(123,108,246,.08)}
+  #ragRetBtn:disabled,#ragAskBtn:disabled{opacity:.4;cursor:not-allowed}
+  #ragAnswerPanel{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+  #ragAnswer{flex:1;overflow-y:auto;font-family:var(--mono);font-size:.9rem;line-height:1.6;
+    white-space:pre-wrap;word-break:break-word;scrollbar-width:thin;padding:2px}
+  #ragAnswer .dim{color:var(--faint)}
+  #ragRight{display:flex;flex-direction:column;gap:6px;min-height:0}
+  #ragChunksPanel{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+  #ragChunks{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;scrollbar-width:thin}
+  .chunkCard{border:1px solid var(--line);border-radius:8px;background:var(--panel2);padding:6px 8px;
+    animation:pop .3s ease-out}
+  .chunkCard .ch{display:flex;justify-content:space-between;gap:8px;font-family:var(--mono);font-size:.76rem}
+  .chunkCard .src{color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chunkCard .dist{color:var(--warn);white-space:nowrap;font-weight:700}
+  .chunkCard .dist.good{color:var(--ok)}
+  .chunkCard .head{color:var(--dim);font-size:.78rem;margin:2px 0}
+  .chunkCard .body{color:var(--txt);font-size:.78rem;line-height:1.45;max-height:5.5em;overflow:hidden;opacity:.85}
+  .chunkCard.fed{border-color:rgba(123,108,246,.55)}
+  .chunkCard .fedTag{display:none;font-size:.66rem;font-weight:700;color:var(--accent2);letter-spacing:.5px}
+  .chunkCard.fed .fedTag{display:inline}
+  #ragEmpty{color:var(--faint);font-size:.84rem;font-family:var(--mono)}
+
   /* ---------- engine lens (M3) ---------- */
   body.lens-engine #main,body.lens-engine #bar{display:none}
   #engMain{display:none;flex:1 1 auto;min-height:0;grid-template-columns:clamp(250px,23rem,370px) 1fr;gap:6px}
@@ -154,7 +190,7 @@
     <div id="tabs">
       <button class="tab active" data-lens="tokens">Tokens</button>
       <button class="tab" data-lens="engine">Engine</button>
-      <button class="tab stub" title="lands with M4">RAG<small>M4</small></button>
+      <button class="tab" data-lens="rag">RAG</button>
       <button class="tab stub" title="lands with M5">Evals<small>M5</small></button>
       <button class="tab stub" title="lands with M6">Train<small>M6</small></button>
       <button class="tab stub" title="lands with M7">Artifacts<small>M7</small></button>
@@ -231,6 +267,35 @@
       <div class="panel" id="events">
         <h2>Request log</h2>
         <div id="evList"><span id="evEmpty">no requests yet</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ragMain">
+    <div id="ragLeft">
+      <div id="ragOffline">
+        The OpsMate app is not reachable through the proxy. Bring the stack up
+        (<code>make -C labs/opsmate up</code>) and run <code>/ingest</code> once —
+        the RAG lens reads your real retrieval pipeline. Set <code>APP_URL</code>
+        if the app listens elsewhere.
+      </div>
+      <div class="panel">
+        <h2>Ask your corpus</h2>
+        <div id="ragQRow">
+          <input id="ragQ" placeholder="e.g. website throwing 500 errors — what do I check first?" />
+          <button id="ragRetBtn">Retrieve</button>
+          <button id="ragAskBtn">Ask</button>
+        </div>
+      </div>
+      <div class="panel" id="ragAnswerPanel">
+        <h2>Answer (via the model service)</h2>
+        <div id="ragAnswer"><span class="dim">Retrieve shows what the index returns for a question. Ask runs the full pipeline — retrieve, then generate — and marks which chunks fed the answer.</span></div>
+      </div>
+    </div>
+    <div id="ragRight">
+      <div class="panel" id="ragChunksPanel">
+        <h2>Retrieved chunks — live from your index</h2>
+        <div id="ragChunks"><span id="ragEmpty">no retrieval yet</span></div>
       </div>
     </div>
   </div>
@@ -459,13 +524,66 @@
 
   /* ---------- presets: the two contrasting experiments from the lab ---------- */
   /* ---------- lens switching (M3+) ---------- */
+  const LENS_NAMES = { tokens: 'Tokens lens', engine: 'Engine lens', rag: 'RAG lens' };
   document.querySelectorAll('#tabs .tab[data-lens]').forEach(t => t.addEventListener('click', () => {
     document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
     const lens = t.dataset.lens;
     document.body.className = lens === 'tokens' ? '' : 'lens-' + lens;
-    $("lensName").textContent = lens === 'tokens' ? 'Tokens lens' : 'Engine lens';
+    $("lensName").textContent = LENS_NAMES[lens] || lens;
   }));
+
+  /* ---------- RAG lens (M4): live retrieve + ask against the real app ---------- */
+  function renderChunks(list, fedTexts) {
+    const box = $("ragChunks");
+    box.innerHTML = "";
+    if (!list.length) { box.innerHTML = '<span id="ragEmpty">nothing retrieved</span>'; return; }
+    for (const c of list) {
+      const fed = fedTexts === "ALL_FED" ||
+        (Array.isArray(fedTexts) && fedTexts.some(t => t && c.text && t.slice(0, 60) === c.text.slice(0, 60)));
+      const card = document.createElement("div");
+      card.className = "chunkCard" + (fed ? " fed" : "");
+      const distCls = c.distance < 0.45 ? "dist good" : "dist";
+      card.innerHTML =
+        `<div class="ch"><span class="src"></span><span class="${distCls}"></span></div>` +
+        `<div class="head"></div><div class="body"></div><span class="fedTag">FED THE ANSWER</span>`;
+      card.querySelector(".src").textContent = c.source || "";
+      card.querySelector("." + distCls.split(" ")[0]).textContent = (c.distance ?? 0).toFixed(3);
+      card.querySelector(".head").textContent = c.heading || "";
+      card.querySelector(".body").textContent = (c.text || "").replace(/^##[^\n]*\n+/, "").slice(0, 400);
+      box.appendChild(card);
+    }
+  }
+  async function ragCall(mode) {
+    const q = $("ragQ").value.trim();
+    if (!q) return;
+    $("ragRetBtn").disabled = $("ragAskBtn").disabled = true;
+    try {
+      const r = await fetch(`/app/${mode}?q=` + encodeURIComponent(q));
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      $("ragOffline").classList.remove("show");
+      if (mode === "retrieve") {
+        renderChunks(d.results || [], null);
+        $("ragAnswer").innerHTML = '<span class="dim">Retrieval only — no generation. Read the distances on the right: ranking and the gap between hits is the signal, not the absolute number.</span>';
+      } else {
+        // /ask returns the sources that fed the answer (source/heading/distance —
+        // no text body); every card rendered here IS a feeding source.
+        const used = d.sources || d.chunks || d.results || [];
+        renderChunks(used, "ALL_FED");
+        $("ragAnswer").textContent = d.answer || JSON.stringify(d).slice(0, 400);
+      }
+      logEv("rag:" + mode, `"${q.slice(0, 40)}" → ${(d.results || d.sources || []).length} chunks`);
+    } catch (e) {
+      $("ragOffline").classList.add("show");
+      $("ragAnswer").innerHTML = '<span class="dim">app unreachable — see the banner above</span>';
+    } finally {
+      $("ragRetBtn").disabled = $("ragAskBtn").disabled = false;
+    }
+  }
+  $("ragRetBtn").addEventListener("click", () => ragCall("retrieve"));
+  $("ragAskBtn").addEventListener("click", () => ragCall("ask"));
+  $("ragQ").addEventListener("keydown", e => { if (e.key === "Enter") ragCall("retrieve"); });
 
   /* ---------- Engine lens (M3): poll llama-server /metrics ---------- */
   const engHist = [];   // [t, predictedTotal]

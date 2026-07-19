@@ -1,0 +1,76 @@
+{
+  "checks": [
+    {
+      "id": "embed-model-serves-768-dim",
+      "describe": "host Ollama serves nomic-embed-text and returns 768-dim vectors — the embedding backbone (Step 0). Self-seeds by pulling the model if absent",
+      "run": "curl -s --max-time 5 http://localhost:11434/api/embed -d '{\"model\":\"nomic-embed-text\",\"input\":\"ping\"}' | jq -e '.embeddings[0]|length' >/dev/null 2>&1 || ollama pull nomic-embed-text >/dev/null 2>&1; D=$(curl -s --max-time 30 http://localhost:11434/api/embed -d '{\"model\":\"nomic-embed-text\",\"input\":\"payments api 500\"}' | jq -r '.embeddings[0]|length'); if [ \"$D\" = \"768\" ]; then echo embed-768; else echo embed-bad; fi",
+      "assert": {
+        "contains": "embed-768"
+      },
+      "weight": 2
+    },
+    {
+      "id": "corpus-present-twelve-runbooks",
+      "describe": "the runbook corpus exists with at least a dozen ##-headed markdown runbooks (Step 1)",
+      "run": "N=$(ls labs/opsmate/corpus/*.md 2>/dev/null | wc -l | tr -d ' '); if [ \"$N\" -ge 12 ]; then echo corpus-ok; else echo corpus-short; fi",
+      "assert": {
+        "contains": "corpus-ok"
+      },
+      "weight": 1
+    },
+    {
+      "id": "compose-grows-app-and-ui",
+      "describe": "the compose spine grew the M4 app + ui services (build ./app, build ./ui, host.docker.internal for embeddings, model:8080 for generation) — the hand-authored growth (Step 2)",
+      "run": "F=labs/opsmate/compose.yaml; if grep -q 'build: ./app' \"$F\" && grep -q 'build: ./ui' \"$F\" && grep -q 'host.docker.internal:11434' \"$F\" && grep -q 'MODEL_URL' \"$F\"; then echo compose-grown; else echo compose-missing; fi",
+      "assert": {
+        "contains": "compose-grown"
+      },
+      "weight": 2
+    },
+    {
+      "id": "stack-up-app-healthy",
+      "describe": "the grown OpsMate stack is up and the RAG app answers /health with a status ok (Step 2). Self-seeds by bringing the stack up if the app is not answering",
+      "run": "curl -fsS --max-time 3 http://localhost:8001/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; for i in $(seq 1 30); do curl -fsS --max-time 3 http://localhost:8001/health >/dev/null 2>&1 && break; sleep 2; done; curl -s --max-time 10 http://localhost:8001/health | jq -r '.status' | grep -c 'ok' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo app-healthy; else echo app-down; fi'",
+      "assert": {
+        "contains": "app-healthy"
+      },
+      "weight": 3
+    },
+    {
+      "id": "ingest-builds-index",
+      "describe": "POST /ingest walks the corpus, chunks + embeds + upserts, and the index reports a non-zero chunk count (Step 3). Self-seeds the stack and ingests if needed; asserts a non-empty index, never a fixed count",
+      "run": "curl -fsS --max-time 3 http://localhost:8001/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; curl -s --max-time 180 -X POST http://localhost:8001/ingest >/dev/null 2>&1; C=$(curl -s --max-time 10 http://localhost:8001/health | jq -r '.chunks // 0'); if [ \"$C\" -gt 0 ] 2>/dev/null; then echo index-built; else echo index-empty; fi",
+      "assert": {
+        "contains": "index-built"
+      },
+      "weight": 3
+    },
+    {
+      "id": "retrieve-semantic-hit",
+      "describe": "GET /retrieve for a 500-errors query returns the payments 5xx runbook as the top hit with zero lexical overlap — the semantic-retrieval exhibit (Step 4). Self-seeds and ingests if needed",
+      "run": "curl -fsS --max-time 3 http://localhost:8001/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; [ \"$(curl -s http://localhost:8001/health | jq -r '.chunks // 0')\" -gt 0 ] 2>/dev/null || curl -s -X POST http://localhost:8001/ingest >/dev/null 2>&1; curl -s --max-time 30 'http://localhost:8001/retrieve?q=website%20throwing%20500%20errors' | jq -r '.results[0].source' | grep -c 'payments-api-5xx.md' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo semantic-hit; else echo semantic-miss; fi'",
+      "assert": {
+        "contains": "semantic-hit"
+      },
+      "weight": 3
+    },
+    {
+      "id": "ask-grounded-with-sources",
+      "describe": "GET /ask retrieves then generates through the model service and returns an answer plus the cited sources — full RAG end to end (Step 5). Self-seeds the stack and index if needed",
+      "run": "curl -fsS --max-time 3 http://localhost:8001/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; [ \"$(curl -s http://localhost:8001/health | jq -r '.chunks // 0')\" -gt 0 ] 2>/dev/null || curl -s -X POST http://localhost:8001/ingest >/dev/null 2>&1; curl -s --max-time 180 'http://localhost:8001/ask?q=payments%20api%20500s%20what%20do%20I%20check' | jq -r 'if (.answer|length > 0) and (.sources|length > 0) then \"ask-ok\" else \"ask-fail\" end'",
+      "assert": {
+        "contains": "ask-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "injection-template-holds",
+      "describe": "the app prompt template tags retrieved chunks as untrusted data and separates instructions from context — the injection-hygiene exhibit lives in the code (Step 6)",
+      "run": "if grep -q 'untrusted' labs/opsmate/app/main.py && grep -q 'CONTEXT' labs/opsmate/app/main.py; then echo hygiene-present; else echo hygiene-missing; fi",
+      "assert": {
+        "contains": "hygiene-present"
+      },
+      "weight": 2
+    }
+  ]
+}

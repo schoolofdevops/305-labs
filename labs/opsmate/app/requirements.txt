@@ -1,0 +1,6 @@
+# OpsMate RAG backend (M4). Major versions pinned so the lab is reproducible;
+# patch/minor float within the major so it keeps building.
+fastapi>=0.115,<1
+uvicorn[standard]>=0.34,<1
+chromadb>=1.0,<2
+httpx>=0.28,<1

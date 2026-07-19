@@ -7,7 +7,7 @@ no fake numbers — and grows one lens per module.
 | --- | --- | --- |
 | **Tokens** | M1 | A request split into prefill and decode on your real model: live token stream, TTFT (client and server view), TPOT, tok/s, phase-split bar, context-window usage |
 | **Engine** | M3 | Your real llama-server's `/metrics`, polled live: requests processing/deferred (watch queueing appear under load), lifetime token counters with rates, decode tok/s trend chart, engine log |
-| RAG | M4 | _lands with M4_ |
+| **RAG** | M4 | Ask your real corpus: Retrieve shows ranked chunks with sources + distances live from your index; Ask runs the full pipeline and marks which chunks fed the answer |
 | Evals | M5 | _lands with M5_ |
 | Train | M6 | _lands with M6_ |
 | Artifacts | M7 | _lands with M7_ |
@@ -40,6 +40,7 @@ web page, ask why it didn't do this instead.
 
 Ollama listening elsewhere? `OLLAMA_HOST_URL=http://other-host:11434 bash serve.sh`.
 llama-server elsewhere (Engine lens)? `LLAMACPP_URL=http://other-host:8080 bash serve.sh`.
+OpsMate app elsewhere (RAG lens)? `APP_URL=http://other-host:8001 bash serve.sh`.
 
 ## Connection budget (a design note worth stealing)
 

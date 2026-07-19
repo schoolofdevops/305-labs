@@ -4,7 +4,8 @@
 # This file GROWS module by module, service by service, from here (M3) to M13.
 # It starts as a single serving engine and matures into the full OpsMate stack:
 #   M3  model            — the serving engine (llama-server), this file's first service
-#   M4  + retriever/db    — RAG over the runbooks
+#   M4  + app, ui         — RAG over the runbooks (FastAPI backend + Streamlit UI,
+#                           Chroma embedded in the app, embeddings via host Ollama)
 #   M5  + eval harness
 #   ... through M7, then the Compose phase is retired for Kubernetes (M8+).
 #
@@ -46,4 +47,57 @@ services:
       timeout: 3s
       retries: 20
       start_period: 30s
+    restart: unless-stopped
+
+  # --- M4: the RAG backend ---------------------------------------------------
+  # FastAPI app: /ingest walks the corpus, chunks + embeds, upserts to Chroma;
+  # /retrieve returns nearest chunks + distances; /ask does full RAG. Chroma is
+  # EMBEDDED in this process (PersistentClient on the ./data/chroma volume) — no
+  # vector-DB container on the 8 GB path. Embeddings come from host Ollama
+  # (nomic-embed-text) via host.docker.internal (the M3 Apple-Silicon pattern);
+  # generation goes through the `model` service above, keeping the spine story straight.
+  app:
+    build: ./app
+    container_name: opsmate-app
+    ports:
+      - "8001:8001"
+    environment:
+      # host Ollama for embeddings — the containerized-app-reaches-host pattern.
+      # Default targets Docker Desktop's host.docker.internal. On runtimes where
+      # that name maps to the bridge gateway instead of the host (Rancher Desktop,
+      # Colima, plain Docker Engine), export OLLAMA_URL to the address the
+      # container actually reaches the host on — see the lab Troubleshooting.
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      # generation through the compose model service (service name on the network)
+      MODEL_URL: http://model:8080
+      EMBED_MODEL: nomic-embed-text
+      CHAT_MODEL: qwen3-0.6b
+      CORPUS_DIR: /corpus
+      CHROMA_DIR: /data/chroma
+    volumes:
+      - ./data/chroma:/data/chroma        # the embedded Chroma store, persisted
+      - ./corpus:/corpus:ro               # the runbook corpus, read-only
+    mem_limit: 1g
+    extra_hosts:
+      # Linux needs this mapping to reach the host; Docker Desktop provides it
+      # automatically, but declaring it makes the stack behave the same everywhere.
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      model:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # --- M4: the chat UI -------------------------------------------------------
+  # Streamlit chat page. Talks only to the app service (/ask, /retrieve) and shows
+  # the retrieved chunks in an expander so you can see what fed each answer.
+  ui:
+    build: ./ui
+    container_name: opsmate-ui
+    ports:
+      - "8501:8501"
+    environment:
+      APP_URL: http://app:8001
+    mem_limit: 512m
+    depends_on:
+      - app
     restart: unless-stopped
