@@ -1,0 +1,94 @@
+{
+  "checks": [
+    {
+      "id": "generator-model-serves",
+      "describe": "host Ollama serves the synthetic-data generator model qwen3:0.6b (Step 2). Self-seeds by pulling it if absent",
+      "run": "ollama list 2>/dev/null | grep -q 'qwen3:0.6b' || ollama pull qwen3:0.6b >/dev/null 2>&1; if ollama list 2>/dev/null | grep -q 'qwen3:0.6b'; then echo gen-ready; else echo gen-missing; fi",
+      "assert": {
+        "contains": "gen-ready"
+      },
+      "weight": 2
+    },
+    {
+      "id": "m6-scripts-present",
+      "describe": "the three pipeline scripts exist — synthesize, train, merge/convert (Steps 2, 3, 5)",
+      "run": "if [ -s labs/m6/synthesize.py ] && [ -s labs/m6/train_lora.py ] && [ -s labs/m6/merge_and_convert.py ]; then echo scripts-present; else echo scripts-missing; fi",
+      "assert": {
+        "contains": "scripts-present"
+      },
+      "weight": 1
+    },
+    {
+      "id": "synthesize-holds-out-golden",
+      "describe": "the synthesizer reads only the corpus and never OPENS the held-out golden set — the contamination rule (Step 2). It may mention golden.yaml in comments, but must not read the file",
+      "run": "F=labs/m6/synthesize.py; if grep -q 'corpus' \"$F\" && ! grep -qE 'open\\([^)]*golden|yaml.safe_load|--golden' \"$F\"; then echo holdout-clean; else echo holdout-risk; fi",
+      "assert": {
+        "contains": "holdout-clean"
+      },
+      "weight": 2
+    },
+    {
+      "id": "synthetic-data-generated",
+      "describe": "synthesize.py produces chat-format train/eval JSONL from the corpus (Step 2). Self-seeds a small 2-section sample if none present; asserts the chat shape, not a run-specific count",
+      "run": "T=labs/opsmate/train/train.jsonl; [ -s \"$T\" ] || OLLAMA_URL=${OLLAMA_URL:-http://localhost:11434} uv run --quiet labs/m6/synthesize.py --max-sections 2 --eval-frac 0.2 >/dev/null 2>&1; if [ -s \"$T\" ] && head -1 \"$T\" | jq -e '.messages[0].role == \"system\" and .messages[2].role == \"assistant\"' >/dev/null 2>&1; then echo synth-ok; else echo synth-bad; fi",
+      "assert": {
+        "contains": "synth-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "train-config-is-lora-spike",
+      "describe": "the trainer uses the spike LoRA config — r=8, alpha=16, q_proj+v_proj — and prints the trainable-parameter line (Step 3)",
+      "run": "F=labs/m6/train_lora.py; if grep -q 'q_proj' \"$F\" && grep -q 'v_proj' \"$F\" && grep -q 'print_trainable_parameters' \"$F\"; then echo lora-config-ok; else echo lora-config-bad; fi",
+      "assert": {
+        "contains": "lora-config-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "training-writes-progress-and-descends",
+      "describe": "training writes progress.jsonl (one line per step, the X-Ray Train lens tails it) and the loss descends across the run — last loss below first (Step 3, Step 4). Self-seeds a short real train if no progress log exists; asserts the shape, not a target loss",
+      "run": "P=labs/opsmate/train/progress.jsonl; if [ ! -s \"$P\" ]; then T=labs/opsmate/train/train.jsonl; [ -s \"$T\" ] || OLLAMA_URL=${OLLAMA_URL:-http://localhost:11434} uv run --quiet labs/m6/synthesize.py --max-sections 4 --eval-frac 0.2 >/dev/null 2>&1; uv run --quiet labs/m6/train_lora.py --epochs 6 >/dev/null 2>&1; fi; F=$(head -1 \"$P\" 2>/dev/null | jq -r '.loss // empty' 2>/dev/null); L=$(tail -1 \"$P\" 2>/dev/null | jq -r '.loss // empty' 2>/dev/null); N=$(grep -c '\"step\"' \"$P\" 2>/dev/null); if [ -n \"$F\" ] && [ -n \"$L\" ] && [ \"$N\" -ge 2 ] 2>/dev/null && awk \"BEGIN{exit !($L < $F)}\"; then echo loss-descends; else echo loss-flat; fi",
+      "assert": {
+        "contains": "loss-descends"
+      },
+      "weight": 3
+    },
+    {
+      "id": "adapter-saved-and-tiny",
+      "describe": "the LoRA adapter is saved and is a small artifact (a few MB) — the removable-fittings / M7-packages-this point (Step 3)",
+      "run": "D=labs/opsmate/train/adapter; if [ -f \"$D/adapter_model.safetensors\" ] && [ -f \"$D/adapter_config.json\" ]; then echo adapter-saved; else echo adapter-missing; fi",
+      "assert": {
+        "contains": "adapter-saved"
+      },
+      "weight": 2
+    },
+    {
+      "id": "compose-model-gguf-switchable",
+      "describe": "the compose model service serves a switchable GGUF file via MODEL_GGUF, defaulting to the base model (Step 6)",
+      "run": "F=labs/opsmate/compose.yaml; if grep -q 'MODEL_GGUF:-qwen3-0.6b-q8_0.gguf' \"$F\"; then echo gguf-switchable; else echo gguf-fixed; fi",
+      "assert": {
+        "contains": "gguf-switchable"
+      },
+      "weight": 2
+    },
+    {
+      "id": "tuned-gguf-servable",
+      "describe": "the merge+convert step produced a servable tuned GGUF next to the base one (Step 5). Self-seeds merge+convert from the adapter if absent; asserts the file exists and starts with the GGUF magic",
+      "run": "G=labs/opsmate/models/gguf/opsmate-tuned-q8_0.gguf; if [ ! -f \"$G\" ] && [ -d labs/opsmate/train/adapter ]; then uv run --quiet labs/m6/merge_and_convert.py >/dev/null 2>&1; fi; if [ -f \"$G\" ] && [ \"$(head -c 4 \"$G\" 2>/dev/null)\" = \"GGUF\" ]; then echo tuned-gguf-ok; else echo tuned-gguf-missing; fi",
+      "assert": {
+        "contains": "tuned-gguf-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "baseline-template-has-m6-rows",
+      "describe": "the baseline template carries the M6 rows so the learner can record tuned-vs-baseline numbers into baseline-mine.md (Step 7)",
+      "run": "F=labs/opsmate/evals/baseline-template.md; if grep -qi 'M6' \"$F\" && grep -qi 'tuned' \"$F\"; then echo m6-rows-present; else echo m6-rows-missing; fi",
+      "assert": {
+        "contains": "m6-rows-present"
+      },
+      "weight": 2
+    }
+  ]
+}

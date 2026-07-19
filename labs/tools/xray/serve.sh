@@ -13,7 +13,7 @@ OLLAMA_UP="$(curl -s --max-time 2 "${OLLAMA_URL}/api/version" 2>/dev/null || ech
 LLAMA_UP="$(curl -s --max-time 2 "${LLAMACPP}/health" 2>/dev/null || echo '')"
 
 echo "┌─────────────────────────────────────────────────────────────"
-echo "│  LLM Stack X-Ray · Tokens (M1) · Engine (M3) · RAG (M4) · Evals (M5)"
+echo "│  LLM Stack X-Ray · Tokens (M1) · Engine (M3) · RAG (M4) · Evals (M5) · Train (M6)"
 echo "│"
 echo "│  ollama       : ${OLLAMA_URL}"
 if [ -n "${OLLAMA_UP}" ]; then

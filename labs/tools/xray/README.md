@@ -9,7 +9,7 @@ no fake numbers — and grows one lens per module.
 | **Engine** | M3 | Your real llama-server's `/metrics`, polled live: requests processing/deferred (watch queueing appear under load), lifetime token counters with rates, decode tok/s trend chart, engine log |
 | **RAG** | M4 | Ask your real corpus: Retrieve shows ranked chunks with sources + distances live from your index; Ask runs the full pipeline and marks which chunks fed the answer |
 | **Evals** | M5 | The course scoreboard: retrieval tripwire (N/24), the three generation arms (no-RAG / v1 / v2) as bars, the RAG-vs-no-RAG gap, honesty-refusal count, and the per-question pass/fail grid — read live from the eval JSONs your runs write |
-| Train | M6 | _lands with M6_ |
+| **Train** | M6 | Tails your real `train/progress.jsonl` live: loss curve for the whole run, step/lr/elapsed/sec-per-step gauges, first-vs-latest loss, and the run-complete summary banner |
 | Artifacts | M7 | _lands with M7_ |
 | K8s | M8 | _lands with M8_ |
 | Traces | M10 | _lands with M10_ |

@@ -163,6 +163,21 @@
   .chunkCard.fed .fedTag{display:inline}
   #ragEmpty{color:var(--faint);font-size:.84rem;font-family:var(--mono)}
 
+  /* ---------- train lens (M6) ---------- */
+  body.lens-train #main,body.lens-train #bar,body.lens-train #engMain,body.lens-train #ragMain,body.lens-train #evMain{display:none}
+  #trMain{display:none;flex:1 1 auto;min-height:0;grid-template-columns:clamp(250px,22rem,360px) 1fr;gap:6px}
+  body.lens-train #trMain{display:grid}
+  #trLeft{display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto;scrollbar-width:thin}
+  #trOffline{display:none;border:1px dashed rgba(245,185,66,.5);border-radius:9px;padding:10px 12px;
+    color:var(--warn);font-size:.9rem;line-height:1.5;background:rgba(245,185,66,.06)}
+  #trOffline.show{display:block}
+  #trOffline code{font-family:var(--mono);font-size:.84rem;color:var(--txt);background:rgba(255,255,255,.06);padding:0 4px;border-radius:4px}
+  #trDone{display:none;border:1px solid rgba(61,220,151,.4);border-radius:9px;padding:8px 12px;
+    color:var(--ok);font-size:.86rem;font-family:var(--mono)}
+  #trDone.show{display:block}
+  #trChartPanel{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+  #trChart{flex:1;min-height:0;width:100%}
+
   /* ---------- evals lens (M5) ---------- */
   body.lens-evals #main,body.lens-evals #bar,body.lens-evals #engMain,body.lens-evals #ragMain{display:none}
   #evMain{display:none;flex:1 1 auto;min-height:0;grid-template-columns:clamp(250px,24rem,380px) 1fr;gap:6px}
@@ -219,7 +234,7 @@
       <button class="tab" data-lens="engine">Engine</button>
       <button class="tab" data-lens="rag">RAG</button>
       <button class="tab" data-lens="evals">Evals</button>
-      <button class="tab stub" title="lands with M6">Train<small>M6</small></button>
+      <button class="tab" data-lens="train">Train</button>
       <button class="tab stub" title="lands with M7">Artifacts<small>M7</small></button>
       <button class="tab stub" title="lands with M8">K8s<small>M8</small></button>
       <button class="tab stub" title="lands with M10">Traces<small>M10</small></button>
@@ -324,6 +339,34 @@
         <h2>Retrieved chunks — live from your index</h2>
         <div id="ragChunks"><span id="ragEmpty">no retrieval yet</span></div>
       </div>
+    </div>
+  </div>
+
+  <div id="trMain">
+    <div id="trLeft">
+      <div id="trOffline">
+        No training log found. The lens tails <code>labs/opsmate/train/progress.jsonl</code> —
+        start a run (<code>uv run labs/m6/train_lora.py</code>) and this page follows it live,
+        or shows the last completed run.
+      </div>
+      <div id="trDone">run complete — <span id="trDoneTxt"></span></div>
+      <div class="panel">
+        <h2>Training — this run</h2>
+        <div class="row"><span class="lbl">step</span><span><span class="val hot" id="trStep">—</span></span></div>
+        <div class="row"><span class="lbl">loss</span><span><span class="val" id="trLoss">—</span></span></div>
+        <div class="row"><span class="lbl">learning rate</span><span><span class="val" id="trLr">—</span></span></div>
+        <div class="row"><span class="lbl">elapsed</span><span><span class="val" id="trElapsed">—</span></span></div>
+        <div class="row"><span class="lbl">sec / step</span><span><span class="val" id="trRate">—</span></span></div>
+      </div>
+      <div class="panel">
+        <h2>Loss — first vs latest</h2>
+        <div class="row"><span class="lbl">first</span><span><span class="val" id="trFirst">—</span></span></div>
+        <div class="row"><span class="lbl">latest</span><span><span class="val hot" id="trLast">—</span></span></div>
+      </div>
+    </div>
+    <div class="panel" id="trChartPanel">
+      <h2>Loss curve — the whole run</h2>
+      <svg id="trChart" viewBox="0 0 600 200" preserveAspectRatio="none"></svg>
     </div>
   </div>
 
@@ -584,7 +627,7 @@
 
   /* ---------- presets: the two contrasting experiments from the lab ---------- */
   /* ---------- lens switching (M3+) ---------- */
-  const LENS_NAMES = { tokens: 'Tokens lens', engine: 'Engine lens', rag: 'RAG lens', evals: 'Evals lens' };
+  const LENS_NAMES = { tokens: 'Tokens lens', engine: 'Engine lens', rag: 'RAG lens', evals: 'Evals lens', train: 'Train lens' };
   document.querySelectorAll('#tabs .tab[data-lens]').forEach(t => t.addEventListener('click', () => {
     document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
@@ -592,7 +635,54 @@
     document.body.className = lens === 'tokens' ? '' : 'lens-' + lens;
     $("lensName").textContent = LENS_NAMES[lens] || lens;
     if (lens === 'evals') loadEvals();
+    if (lens === 'train') trPoll();
   }));
+
+  /* ---------- Train lens (M6): tail progress.jsonl ---------- */
+  function drawTrainChart(points) {  // [[step, loss], ...]
+    const svg = $("trChart");
+    if (points.length < 2) { svg.innerHTML = ""; return; }
+    const maxLoss = Math.max(...points.map(p => p[1]));
+    const maxStep = points[points.length - 1][0];
+    const pts = points.map(([st, l]) =>
+      `${(st / maxStep * 600).toFixed(1)},${(195 - l / maxLoss * 185).toFixed(1)}`).join(" ");
+    svg.innerHTML =
+      `<line x1="0" y1="195" x2="600" y2="195" stroke="#26324e" stroke-width="1"/>` +
+      `<text x="4" y="14" fill="#5a6a8c" font-size="11" font-family="monospace">loss ${maxLoss.toFixed(2)} max · ${maxStep} steps</text>` +
+      `<polyline points="${pts}" fill="none" stroke="#7b6cf6" stroke-width="2"/>`;
+  }
+  let trTimer = null;
+  async function trPoll() {
+    if (!document.body.classList.contains("lens-train")) { clearTimeout(trTimer); trTimer = null; return; }
+    try {
+      const text = await (await fetch("/train/progress.jsonl")).text();
+      if (text.trim().startsWith("{\"error\"")) throw new Error("no log");
+      const rows = text.trim().split("\n").map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+      if (!rows.length) throw new Error("empty");
+      $("trOffline").classList.remove("show");
+      const last = rows[rows.length - 1], first = rows[0];
+      setVal("trStep", String(last.step));
+      setVal("trLoss", last.loss.toFixed(4));
+      setVal("trLr", Number(last.lr).toExponential(2));
+      setVal("trElapsed", fmtMs(last.elapsed_s * 1000));
+      setVal("trRate", (last.elapsed_s / last.step).toFixed(2) + " s");
+      $("trFirst").textContent = first.loss.toFixed(4);
+      $("trLast").textContent = last.loss.toFixed(4);
+      drawTrainChart(rows.map(r => [r.step, r.loss]));
+      try {
+        const sum = await (await fetch("/train/train-summary.json")).json();
+        if (sum && !sum.error && sum.last_loss != null) {
+          $("trDone").classList.add("show");
+          $("trDoneTxt").textContent = `${sum.steps} steps · loss ${sum.first_loss} → ${sum.last_loss} · adapter ${sum.adapter_dir || "saved"}`;
+        } else $("trDone").classList.remove("show");
+      } catch { $("trDone").classList.remove("show"); }
+    } catch (e) {
+      $("trOffline").classList.add("show");
+      ["trStep","trLoss","trLr","trElapsed","trRate","trFirst","trLast"].forEach(id => $(id).textContent = "—");
+      $("trChart").innerHTML = "";
+    }
+    trTimer = setTimeout(trPoll, 2000);
+  }
 
   /* ---------- Evals lens (M5): scoreboard over the eval JSON files ---------- */
   async function evalJson(name) {

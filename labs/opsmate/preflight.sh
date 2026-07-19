@@ -13,7 +13,10 @@
 set -euo pipefail
 
 REQUIRED_MB="${1:-2200}"   # M3 floor: llama-server ~1.5 GiB under a 2 GiB cap + headroom
-MODEL_FILE="$(cd "$(dirname "$0")" && pwd)/models/gguf/qwen3-0.6b-q8_0.gguf"
+# M6: the served GGUF is switchable (MODEL_GGUF). Check whichever file will actually
+# be served — so serving the tuned model with a missing/partial GGUF fails here, not
+# in a container crash loop. Defaults to the base model when MODEL_GGUF is unset.
+MODEL_FILE="$(cd "$(dirname "$0")" && pwd)/models/gguf/${MODEL_GGUF:-qwen3-0.6b-q8_0.gguf}"
 
 # --- free memory, in MB, cross-platform ------------------------------------
 free_mb() {

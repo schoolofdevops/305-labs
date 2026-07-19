@@ -1,0 +1,58 @@
+{
+  "checks": [
+    {
+      "id": "dd-rank-sweep-computes-table",
+      "describe": "the rank sweep attaches a LoRA at r=4/8/16/32 and prints the trainable-% table without any training (section 1). Asserts the table shape, not a run-specific loss",
+      "run": "uv run --quiet labs/m6/rank_sweep.py 2>/dev/null | grep -Ec 'trainable %|0\\.[0-9]+%' | xargs -I{} sh -c 'if [ {} -ge 2 ]; then echo sweep-ok; else echo sweep-bad; fi'",
+      "assert": {
+        "contains": "sweep-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "dd-rank-doubles-with-r",
+      "describe": "the sweep confirms trainable params roughly double from r=8 to r=16 — the linear-in-rank point (section 1)",
+      "run": "OUT=$(uv run --quiet labs/m6/rank_sweep.py --ranks 8 16 2>/dev/null); R8=$(echo \"$OUT\" | awk '$1==8{gsub(\",\",\"\",$2); print $2}'); R16=$(echo \"$OUT\" | awk '$1==16{gsub(\",\",\"\",$2); print $2}'); if [ -n \"$R8\" ] && [ -n \"$R16\" ] && [ \"$R16\" -gt \"$R8\" ] 2>/dev/null; then echo rank-linear; else echo rank-odd; fi",
+      "assert": {
+        "contains": "rank-linear"
+      },
+      "weight": 2
+    },
+    {
+      "id": "dd-chat-template-demo-runs",
+      "describe": "the chat-template demo prints the model's own template (with role markers) next to a naive concatenation — the train/serve mismatch failure mode (section 2)",
+      "run": "uv run --quiet labs/m6/chat_template_demo.py 2>/dev/null | grep -Ec 'im_start|CORRECT|WRONG' | xargs -I{} sh -c 'if [ {} -ge 2 ]; then echo template-demo-ok; else echo template-demo-bad; fi'",
+      "assert": {
+        "contains": "template-demo-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "dd-forgetting-probe-present",
+      "describe": "the catastrophic-forgetting probe exists and asks out-of-domain questions to compare base vs tuned (section 3)",
+      "run": "F=labs/m6/forgetting_probe.py; if [ -s \"$F\" ] && grep -q 'PROBES' \"$F\" && grep -q 'chat/completions' \"$F\"; then echo probe-present; else echo probe-missing; fi",
+      "assert": {
+        "contains": "probe-present"
+      },
+      "weight": 2
+    },
+    {
+      "id": "dd-training-container-dockerfile",
+      "describe": "the training-container Dockerfile exists with pinned deps and runs the trainer as its entrypoint (section 4)",
+      "run": "F=labs/m6/Dockerfile.train; if [ -s \"$F\" ] && grep -q 'train_lora.py' \"$F\" && grep -q 'torch==' \"$F\"; then echo dockerfile-ok; else echo dockerfile-missing; fi",
+      "assert": {
+        "contains": "dockerfile-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "dd-colab-qlora-notebook",
+      "describe": "the optional Colab QLoRA notebook exists, is valid JSON, and uses 4-bit quantization (bitsandbytes) — the GPU enrichment track (section 4)",
+      "run": "F=labs/m6/colab_qlora.ipynb; if [ -s \"$F\" ] && jq -e '.cells | length > 0' \"$F\" >/dev/null 2>&1 && grep -q 'load_in_4bit' \"$F\"; then echo colab-ok; else echo colab-bad; fi",
+      "assert": {
+        "contains": "colab-ok"
+      },
+      "weight": 2
+    }
+  ]
+}

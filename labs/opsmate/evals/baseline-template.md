@@ -44,3 +44,32 @@ absolute numbers will differ (hardware, judge noise), the shape should match
 | `system-v2.txt` (v2) | ___ / 15 | ___% |
 
 Which prompt do you retain, and why: ___
+
+## M6 — Tuned model vs baseline (fill after the fine-tune)
+
+Serve the tuned GGUF (`MODEL_GGUF=opsmate-tuned-q8_0.gguf`) and re-run the SAME golden
+set. Fill every `___` from your real tuned-model runs. The retrieval layer is the
+CONTROL — it should be unchanged (tuning changed the model, not the index).
+
+### Retrieval (control — expect unchanged from M5)
+
+| Arm | Passed / Total | % |
+| --- | --- | --- |
+| Tuned + RAG (`/ask`, top-3) | ___ / 24 | ___% |
+
+Did retrieval change from your M5 baseline? ___ (if yes, that is a bug — find it before trusting the rest)
+
+### Generation (tuned model, two arms)
+
+| Arm | Passed / 15 | % | vs M5 baseline |
+| --- | --- | --- | --- |
+| Tuned + RAG (`generation-tuned-latest.json`) | ___ / 15 | ___% | ___ pts (M5 RAG was 6/15) |
+| Tuned, no-RAG direct (`generation-tuned-norag.json`) | ___ / 15 | ___% | ___ pts (M5 no-RAG was 3/15) |
+
+### Read the outcome with the honesty rule
+
+Which outcome did you get — **beat**, **tie**, or **lose** vs the M5 RAG baseline? ___
+
+One honest sentence on what it means (tuning answers voice/format problems, RAG answers
+knowledge problems; the golden set grades knowledge-grounded answers). What does this
+number measure, and what does it NOT measure? ___

@@ -10,6 +10,10 @@
 #                           artifact (./prompts, read-only), and evals/ holds the
 #                           golden set + baseline. No new service — M5 grows the
 #                           app's config surface, not the container count.
+#   M6  + switchable GGUF — the served model file becomes an env var (MODEL_GGUF),
+#                           so the SAME model service serves either the base GGUF
+#                           or the M6-tuned one with no code change — the swap the
+#                           fine-tuning measurement rides on. Still one service.
 #   ... through M7, then the Compose phase is retired for Kubernetes (M8+).
 #
 # Rule for the whole course: one service is added or grown per module, and the
@@ -29,8 +33,12 @@ services:
   model:
     image: ghcr.io/ggml-org/llama.cpp:server
     container_name: opsmate-model
+    # M6: the served GGUF file is switchable via MODEL_GGUF. Default is the base
+    # model (M0–M5); set MODEL_GGUF=opsmate-tuned-q8_0.gguf to serve the fine-tuned
+    # model — same service, same OpenAI-compatible API, one env var. The --alias
+    # stays qwen3-0.6b so the app's CHAT_MODEL never has to change on the swap.
     command: >
-      -m /models/qwen3-0.6b-q8_0.gguf
+      -m /models/${MODEL_GGUF:-qwen3-0.6b-q8_0.gguf}
       --host 0.0.0.0
       --port 8080
       -c 2048

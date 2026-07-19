@@ -160,9 +160,9 @@ async function main() {
   ok('loads: no console errors', consoleErrors.length === 0, consoleErrors.join(' | '));
   ok('loads: no page exceptions', pageErrors.length === 0, pageErrors.join(' | '));
   ok('loads: zero non-same-origin requests', externalReqs.length === 0, externalReqs.join(' | '));
-  ok('lens tabs: 1 active + 4 live lenses + 5 stubs', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
-      && await ev('document.querySelectorAll("#tabs .tab[data-lens]").length') === 4
-      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 5);
+  ok('lens tabs: 1 active + 5 live lenses + 4 stubs', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
+      && await ev('document.querySelectorAll("#tabs .tab[data-lens]").length') === 5
+      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 4);
 
   // ---------- 2. real connection state ----------
   await waitFor('document.getElementById("connInd").className === "connected"', 12000, 'conn: indicator connected');
@@ -257,6 +257,21 @@ async function main() {
   ok('evals: pass and fail dots both present', (await ev('document.querySelectorAll("#evGrid .evQ.pass").length')) >= 1
     && (await ev('document.querySelectorAll("#evGrid .evQ.fail").length')) >= 1);
   ok('evals: offline banner hidden with results present', !(await ev('document.getElementById("evOffline").classList.contains("show")')));
+
+  // ---------- 9. Train lens (M6) — tails the real progress.jsonl ----------
+  await ev('document.querySelector("#tabs .tab[data-lens=train]").click()');
+  ok('train: lens switches (panel visible)',
+    (await ev('document.body.classList.contains("lens-train")')) === true
+    && (await ev('getComputedStyle(document.getElementById("trMain")).display')) === 'grid');
+  await waitFor('document.getElementById("trStep").textContent !== "—"', 10000, 'train: log loads');
+  ok('train: reads the real 186-step run', (await gauge('trStep')) === '186', await gauge('trStep'));
+  ok('train: first > latest loss (descent visible)',
+    parseFloat(await gauge('trFirst')) > parseFloat(await gauge('trLast')),
+    `${await gauge('trFirst')} vs ${await gauge('trLast')}`);
+  ok('train: loss curve polyline rendered', (await ev('document.querySelectorAll("#trChart polyline").length')) >= 1);
+  ok('train: sec/step gauge numeric', /^\d+\.\d+ s$/.test(await gauge('trRate')), await gauge('trRate'));
+  ok('train: done banner with summary', (await ev('document.getElementById("trDone").classList.contains("show")')) === true);
+  ok('train: offline banner hidden', !(await ev('document.getElementById("trOffline").classList.contains("show")')));
 
   // switch back for the screenshot
   await ev('document.querySelector("#tabs .tab[data-lens=tokens]").click()');

@@ -94,3 +94,28 @@ untouched, which is the "prompts as config" point made measurable:_
 - RAG beats no-RAG on generation: yes (6/15 vs 3/15, +20 pts — as expected)
 - This file is committed to the repo as the number M6 must beat: yes — **M6 must beat
   6/15 (40%) generation / 24/24 retrieval on this same golden set.**
+
+## M6 — Tuned model measured against this baseline (course reference run)
+
+M6 fine-tunes OpsMate's model (LoRA `r=8`, 2 epochs, 185 synthetic pairs on the
+0.6B base) and measures the tuned model on this **exact** golden set. Run date
+2026-07-20, same host/embedding config as above — and critically the **same judge
+held constant** (`qwen3:0.6b` via Ollama), so any score change reflects the *answering*
+model, not the grader. The tuned GGUF was served via the compose swap
+(`MODEL_GGUF=opsmate-tuned-q8_0.gguf`).
+
+| Arm | Tuned | Baseline (above) | Δ | Verdict |
+| --- | --- | --- | --- | --- |
+| Retrieval (control) | 24 / 24 (100%) | 24 / 24 | 0 | Unchanged — retrieval is model-independent |
+| Generation, RAG | **2 / 15 (13.3%)** | 6 / 15 (40%) | **−4 (−26.7 pts)** | **LOST** |
+| Generation, no-RAG | **1 / 15 (6.7%)** | 3 / 15 (20%) | **−2 (−13.3 pts)** | **LOST** |
+
+**Verdict: the tuned model did NOT beat the baseline — not shipped.** It regressed
+both graded generation arms while the control held. Catastrophic-forgetting probe was
+clean (general knowledge intact — capital of Japan, 'ephemeral', 17×4 all correct on
+the tuned model), so the regression is a behaviour/answer-discipline shift on the small
+synthetic set, not knowledge loss. This is the intended teaching outcome: the committed
+baseline did its job as a yardstick and refused a model that would have regressed
+quality. **The gate works.** M12 automates exactly this comparison as a CI promotion
+gate. Tuned eval artifacts: `generation-tuned-latest.json` (RAG),
+`generation-tuned-norag.json` (no-RAG).

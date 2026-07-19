@@ -22,6 +22,11 @@ EVALS_DIR = os.environ.get(
     os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                   "..", "..", "opsmate", "evals")),
 )
+TRAIN_DIR = os.environ.get(
+    "TRAIN_DIR",
+    os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  "..", "..", "opsmate", "train")),
+)
 DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -42,28 +47,31 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.startswith("/evals/"):
-            self._serve_eval_file()
+            self._serve_local_file(EVALS_DIR, "/evals/", (".json",))
+        elif self.path.startswith("/train/"):
+            self._serve_local_file(TRAIN_DIR, "/train/", (".json", ".jsonl"))
         elif self._route()[0]:
             self._proxy("GET")
         else:
             super().do_GET()
 
-    def _serve_eval_file(self):
-        # Serve eval result JSONs from the opsmate evals dir (Evals lens, M5).
-        # Filename only — no path traversal.
-        name = os.path.basename(self.path[len("/evals/"):])
-        path = os.path.join(EVALS_DIR, name)
-        if not (name.endswith(".json") and os.path.isfile(path)):
+    def _serve_local_file(self, base_dir, prefix, exts):
+        # Serve result files (Evals lens M5, Train lens M6) from the opsmate
+        # dirs. Filename only — no path traversal.
+        name = os.path.basename(self.path[len(prefix):])
+        path = os.path.join(base_dir, name)
+        if not (name.endswith(exts) and os.path.isfile(path)):
             self.send_response(404)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps(
-                {"error": f"{name} not found — run the M5 eval steps first"}).encode())
+                {"error": f"{name} not found — run the module's steps first"}).encode())
             return
         with open(path, "rb") as f:
             body = f.read()
         self.send_response(200)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type",
+                         "application/json" if name.endswith(".json") else "text/plain")
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)

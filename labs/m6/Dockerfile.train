@@ -1,0 +1,44 @@
+# ============================================================================
+# OpsMate training container — the reproducible fine-tune, containerized.
+#
+# The M6 lab runs the fine-tune with `uv run` directly on the host, NOT in a
+# container. That is a deliberate 8 GB-path choice: a CUDA-enabled torch image is
+# several GB and the container adds no value on a CPU laptop run — pinned uv deps
+# already make the run reproducible. This Dockerfile is the pattern you WOULD use
+# in a real training pipeline (CI, a GPU node, a shared runner), shown here so you
+# have it when you leave the laptop.
+#
+# What it gives you that the host run does not: a frozen, shareable environment.
+# Anyone who runs this image gets byte-identical library versions — no "works on
+# my machine" drift in a result that later gates promotion (M12). On a GPU host
+# you would swap the base for an nvidia/cuda image and add bitsandbytes for QLoRA.
+#
+# Build + run (from the labs repo root):
+#   docker build -f labs/m6/Dockerfile.train -t opsmate-train labs/m6
+#   docker run --rm \
+#     -v "$PWD/labs/opsmate/models:/work/models:ro" \
+#     -v "$PWD/labs/opsmate/train:/work/train" \
+#     opsmate-train \
+#     --base /work/models/qwen3-0.6b \
+#     --train /work/train/train.jsonl \
+#     --out-dir /work/train
+# ============================================================================
+FROM python:3.12-slim
+
+# CPU torch keeps the image small; on a GPU node swap in a cuda base + the cuda
+# torch wheel index. Versions are PINNED so the environment is reproducible.
+RUN pip install --no-cache-dir \
+      "torch==2.4.1" \
+      "transformers>=4.51,<4.55" \
+      "peft==0.13.2" \
+      "accelerate==1.0.1" \
+      "datasets==3.0.1" \
+      "jinja2"
+
+WORKDIR /work
+COPY train_lora.py /work/train_lora.py
+
+# The container's job is one thing: run the trainer. Pass through flags at
+# `docker run` time (--epochs, --rank, ...). The adapter + progress.jsonl land on
+# the mounted /work/train volume, exactly as the host run writes them.
+ENTRYPOINT ["python", "/work/train_lora.py"]
