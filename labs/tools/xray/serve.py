@@ -18,6 +18,10 @@ OLLAMA = os.environ.get("OLLAMA_HOST_URL", "http://127.0.0.1:11434").rstrip("/")
 LLAMACPP = os.environ.get("LLAMACPP_URL", "http://127.0.0.1:8080").rstrip("/")
 APP = os.environ.get("APP_URL", "http://127.0.0.1:8001").rstrip("/")
 REGISTRY = os.environ.get("REGISTRY_URL", "http://127.0.0.1:5100").rstrip("/")
+# K8s lens (M8): the page reaches the cluster through a learner-started
+# `kubectl proxy --kubeconfig labs/opsmate/k8s/kubeconfig --port 8011` — the
+# same same-origin trick, one hop further.
+K8S = os.environ.get("K8S_PROXY_URL", "http://127.0.0.1:8011").rstrip("/")
 EVALS_DIR = os.environ.get(
     "EVALS_DIR",
     os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -39,13 +43,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         pass
 
     PROXIES = (("/ollama/", "OLLAMA"), ("/llamacpp/", "LLAMACPP"), ("/app/", "APP"),
-               ("/registry/", "REGISTRY"))
+               ("/registry/", "REGISTRY"), ("/k8s/", "K8S"))
 
     def _route(self):
         for prefix, name in self.PROXIES:
             if self.path.startswith(prefix):
                 return prefix, {"OLLAMA": OLLAMA, "LLAMACPP": LLAMACPP, "APP": APP,
-                                "REGISTRY": REGISTRY}[name]
+                                "REGISTRY": REGISTRY, "K8S": K8S}[name]
         return None, None
 
     def do_GET(self):

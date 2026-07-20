@@ -1,0 +1,208 @@
+# =============================================================================
+# OpsMate model server on Kubernetes — the arm64 / 8 GB validated serving path.
+#
+# This is the whole M8 serving deployment in one file: a PVC that holds the
+# model, an initContainer that loads it FROM the signed M7 ModelKit, the
+# llama-server container that serves it, probes shaped for a slow loader, and a
+# ClusterIP Service that fronts it. Every block is commented because the lab
+# hand-authors this file and you will re-read it in M9-M13 when the stack grows.
+#
+# The model is NOT baked into any image. It arrives at pod start from the
+# registry as the signed 1.0.0 artifact — the same crate M7 sealed. That is the
+# artifact chain: signed kit in the registry -> initContainer unpacks it -> PVC
+# -> server mounts it. Swap the tag and you redeploy a different model version;
+# the manifest does not change.
+#
+# Apply with the ISOLATED kubeconfig (never your default context):
+#   kubectl --kubeconfig k8s/kubeconfig apply -f k8s/model-server.yaml
+# =============================================================================
+---
+# The PVC is the model's home inside the cluster. The initContainer writes the
+# GGUF here once; the server container reads it. A PVC (not an emptyDir) so the
+# unpacked model survives a container restart — a liveness-triggered restart of
+# the server should NOT re-pull 610 MB from the registry. On this single-node
+# KIND the default `standard` storageClass (local-path) satisfies it instantly.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opsmate-model
+  labels:
+    app: opsmate-model
+spec:
+  accessModes:
+    - ReadWriteOnce          # one node reads/writes it — correct for a single pod
+  resources:
+    requests:
+      storage: 2Gi           # the 610 MB GGUF plus unpack headroom; not the RAM budget
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsmate-model
+  labels:
+    app: opsmate-model
+spec:
+  # ONE replica in M8. Capacity planning (the lesson worksheet) said a single
+  # llama-server on an 8 GB node holds this model plus its KV budget with room to
+  # spare; a second replica is an M9 decision (serving patterns), not a reflex.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsmate-model
+  strategy:
+    type: Recreate           # single PVC (ReadWriteOnce) can't be held by two pods
+                             # at once — Recreate tears the old pod down before the
+                             # new one binds the volume. RollingUpdate would deadlock.
+  template:
+    metadata:
+      labels:
+        app: opsmate-model
+    spec:
+      # --- the two-paths registry fix (taught in the lesson, hit live in the lab) ---
+      # The containerd mirror in kind-config.yaml lets the NODE pull *images* from
+      # the host Zot. It does NOT help a POD make an HTTP call to the registry:
+      # in-pod `localhost:5100` is the pod itself, and the node's
+      # host.docker.internal name is not inherited by pods. So we pin a stable
+      # name `registry.local` to the node-resolved host IP. Discover that IP on
+      # your machine (the lab walks this) and set it here:
+      #   kubectl --kubeconfig k8s/kubeconfig get nodes -o name         # the node
+      #   docker exec opsmate-control-plane getent hosts host.docker.internal
+      # DELIBERATELY WRONG as committed: 127.0.0.1 inside a pod is the pod
+      # itself, so the init pull fails fast with connection refused — the lab
+      # walks you through discovering YOUR host's real IP and fixing this.
+      # On the spike host the real value resolved to 192.168.5.2 — YOURS MAY DIFFER by
+      # container runtime. This is the one value in the file that is host-specific.
+      hostAliases:
+        - ip: "127.0.0.1"            # <-- WRONG on purpose; replace with your getent result (Step 4)
+          hostnames:
+            - "registry.local"
+      initContainers:
+        # The advance man: it runs to completion BEFORE the server container
+        # starts, and it does one job — put the model on the PVC. It pulls the
+        # signed M7 kit and unpacks ONLY the model layer (--filter=model), so the
+        # 610 MB weights land on disk without the eval set or prompt layers.
+        - name: fetch-model
+          image: ghcr.io/kitops-ml/kitops:latest   # official, multi-arch; entrypoint is `kit`
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              # Idempotency guard: if a previous run already placed the GGUF,
+              # skip the pull. A restarted initContainer must not re-fetch 610 MB.
+              if [ -f /model/models/gguf/qwen3-0.6b-q8_0.gguf ]; then
+                echo "model already present on PVC — skipping unpack"
+                exit 0
+              fi
+              echo "unpacking signed ModelKit opsmate/model:1.0.0 (model layer only) ..."
+              kit unpack registry.local:5100/opsmate/model:1.0.0 \
+                --filter=model -d /tmp/kit --plain-http
+              # The kit preserves Kitfile-relative layout: models/gguf/<file>.gguf.
+              # Move the whole tree onto the PVC so the server's mount path is stable.
+              mkdir -p /model/models
+              cp -r /tmp/kit/models/* /model/models/
+              echo "model on PVC:"
+              ls -lh /model/models/gguf/
+          volumeMounts:
+            - name: model-store
+              mountPath: /model
+      containers:
+        - name: llama-server
+          # The SAME official multi-arch llama-server image the Compose stack used
+          # in M3 — one tag serves the right build on arm64 or amd64. The engine
+          # did not change moving from Compose to Kubernetes; only its wrapper did.
+          image: ghcr.io/ggml-org/llama.cpp:server
+          args:
+            - "-m"
+            - "/model/models/gguf/qwen3-0.6b-q8_0.gguf"  # the GGUF the initContainer placed
+            - "--host"
+            - "0.0.0.0"                # listen on all interfaces (not localhost, or the
+                                       # Service could never reach it)
+            - "--port"
+            - "8080"
+            - "-c"
+            - "2048"                   # context window = the KV budget (M1). The worksheet
+                                       # derived the memory limit below FROM this number.
+            - "--metrics"              # expose Prometheus /metrics (the M3 surface, in-cluster)
+            - "--alias"
+            - "qwen3-0.6b"             # the client-facing model name (unchanged from M3)
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            # DERIVED from the capacity worksheet, not copied from a template:
+            #   weights (~0.65 GiB Q8) + runtime buffers (~0.3 GiB)
+            #   + KV for 2048 ctx (~0.22 GiB at 112 KiB/token) ≈ ~1.2 GiB working set.
+            # request = what the scheduler reserves (the honest working set);
+            # limit   = the hard ceiling before the kernel OOM-kills the pod.
+            # We leave headroom above the working set so a burst does not trip the
+            # limit, but keep it under the node budget so one pod can't starve it.
+            requests:
+              memory: "1200Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"         # the M3 mem_limit, now a K8s limit — same ceiling
+              cpu: "2"
+          # --- probes shaped for a service that takes ~40 s to load before it can
+          #     answer ANYTHING. This is where every ordinary K8s probe instinct
+          #     must be re-derived for a model server (the lesson's core point). ---
+          startupProbe:
+            # The startupProbe holds the OTHER two probes off until the model is
+            # loaded. failureThreshold * periodSeconds = the load budget: here
+            # 30 * 5s = 150 s of grace. Generous on purpose — the initContainer
+            # plus a cold llama-server load must fit inside it, or K8s kills a
+            # perfectly healthy pod mid-load and never lets it finish.
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30      # 30 * 5s = 150 s to finish loading
+          readinessProbe:
+            # Readiness gates TRAFFIC, not life. Once /health is green the Service
+            # sends requests; if the engine ever stops being ready (saturated,
+            # reloading) it is pulled from the endpoints WITHOUT being killed.
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            # Liveness restarts a WEDGED pod. It must be lenient: a slow-but-alive
+            # engine under load must never trip it, or you get a restart loop that
+            # re-loads the model and makes the outage worse. Because the
+            # startupProbe already covered the long load, liveness only guards the
+            # steady state — hence the long period and a tolerant threshold.
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3       # 3 * 20s = 60 s wedged before a restart
+          volumeMounts:
+            # The SAME PVC the initContainer wrote to, mounted at the SAME path.
+            # Without this the server sees an empty /model and dies with
+            # "No such file or directory" — the model lands on the volume, but a
+            # container only sees a volume it explicitly mounts.
+            - name: model-store
+              mountPath: /model
+      volumes:
+        - name: model-store
+          persistentVolumeClaim:
+            claimName: opsmate-model
+---
+# The Service is the stable in-cluster address for the model. ClusterIP (the
+# default) because this is an internal dependency — M9's clients, M10's scraper,
+# M12's gateway all reach it by this name, `opsmate-model:8080`. Nothing outside
+# the cluster needs it directly; the lab reaches it with `kubectl port-forward`.
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsmate-model
+  labels:
+    app: opsmate-model
+spec:
+  selector:
+    app: opsmate-model            # routes to the pods carrying this label
+  ports:
+    - name: http
+      port: 8080                  # the Service port callers dial
+      targetPort: http            # the container port it forwards to (named above)
+  type: ClusterIP

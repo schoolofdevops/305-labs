@@ -1,0 +1,103 @@
+{
+  "checks": [
+    {
+      "id": "compose-model-down",
+      "describe": "the Compose model service is DOWN — one heavyweight stack at a time (Step 1). The KIND phase must not run alongside the Compose model server. The registry compose service may stay up (it is the model source)",
+      "run": "if curl -fsS --max-time 2 http://localhost:8080/health >/dev/null 2>&1 && ! curl -fsS --max-time 2 http://localhost:5100/v2/_catalog >/dev/null 2>&1; then echo compose-model-up; else echo compose-model-down; fi",
+      "assert": {
+        "contains": "compose-model-down"
+      },
+      "weight": 1
+    },
+    {
+      "id": "kind-cluster-node-ready",
+      "describe": "the slim single-node KIND cluster is up and its node reports Ready, reached through the ISOLATED kubeconfig (Step 1). Self-seeds by running make k8s-up if the cluster is absent",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; kubectl get nodes 2>/dev/null | grep -c ' Ready ' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo node-ready; else echo node-not-ready; fi'",
+      "assert": {
+        "contains": "node-ready"
+      },
+      "weight": 3
+    },
+    {
+      "id": "isolated-kubeconfig-present",
+      "describe": "the cluster runs with an isolated kubeconfig at labs/opsmate/k8s/kubeconfig naming the throwaway cluster — the visitor-badge discipline, the default context untouched (Step 1)",
+      "run": "F=labs/opsmate/k8s/kubeconfig; if [ -s \"$F\" ] && grep -q 'opsmate' \"$F\"; then echo kubeconfig-isolated; else echo kubeconfig-missing; fi",
+      "assert": {
+        "contains": "kubeconfig-isolated"
+      },
+      "weight": 2
+    },
+    {
+      "id": "m7-signed-kit-present",
+      "describe": "the M7 registry is up and the signed opsmate/model:1.0.0 is present — the model source the cluster pulls from (Step 3, the M7 seam). Self-seeds the registry + push via the M7 seed if reachable",
+      "run": "bash labs/m7/seed.sh >/dev/null 2>&1 || true; T=$(curl -fsS --max-time 5 http://localhost:5100/v2/opsmate/model/tags/list 2>/dev/null); if echo \"$T\" | grep -q '\"1.0.0\"'; then echo kit-present; else echo kit-missing; fi",
+      "assert": {
+        "contains": "kit-present"
+      },
+      "weight": 2
+    },
+    {
+      "id": "capacity-worksheet-filled",
+      "describe": "the capacity worksheet exists with its three derive-and-fill fields (Step 2) — values are the learner's own, so presence not numbers is asserted",
+      "run": "F=labs/m8/capacity-worksheet.md; if [ -s \"$F\" ] && grep -q 'requests.memory' \"$F\" && grep -q 'limits.memory' \"$F\" && grep -q 'replicas' \"$F\"; then echo worksheet-present; else echo worksheet-missing; fi",
+      "assert": {
+        "contains": "worksheet-filled"
+      },
+      "weight": 1
+    },
+    {
+      "id": "manifest-artifact-chain-shape",
+      "describe": "model-server.yaml encodes the artifact chain: a PVC, an initContainer that kit-unpacks the model layer from the registry, the llama-server container, and hostAliases for the two-paths fix (Step 4)",
+      "run": "F=labs/opsmate/k8s/model-server.yaml; if grep -q 'kind: PersistentVolumeClaim' \"$F\" && grep -q 'initContainers' \"$F\" && grep -q 'kit unpack' \"$F\" && grep -q -- '--filter=model' \"$F\" && grep -q 'ghcr.io/ggml-org/llama.cpp:server' \"$F\" && grep -q 'hostAliases' \"$F\"; then echo chain-ok; else echo chain-bad; fi",
+      "assert": {
+        "contains": "chain-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "manifest-probes-shaped-for-slow-start",
+      "describe": "model-server.yaml has probes shaped for a slow starter: a startupProbe (the load budget) plus readiness and a lenient liveness — the sound-check vs show-must-go-on design (Step 4)",
+      "run": "F=labs/opsmate/k8s/model-server.yaml; if grep -q 'startupProbe' \"$F\" && grep -q 'readinessProbe' \"$F\" && grep -q 'livenessProbe' \"$F\"; then echo probes-ok; else echo probes-missing; fi",
+      "assert": {
+        "contains": "probes-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "model-pod-running-from-kit",
+      "describe": "the model pod is 1/1 Running from the signed kit — the initContainer pulled the model onto the PVC and llama-server loaded it (Step 4). Self-seeds: cluster up, kits present, kubectl apply, wait Ready",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; bash labs/m7/seed.sh >/dev/null 2>&1 || true; kubectl get deploy opsmate-model >/dev/null 2>&1 || kubectl apply -f labs/opsmate/k8s/model-server.yaml >/dev/null 2>&1; kubectl wait --for=condition=Ready pod -l app=opsmate-model --timeout=180s >/dev/null 2>&1; kubectl get pods -l app=opsmate-model 2>/dev/null | grep -c '1/1 *Running' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo pod-running; else echo pod-not-running; fi'",
+      "assert": {
+        "contains": "pod-running"
+      },
+      "weight": 3
+    },
+    {
+      "id": "service-serves-openai-chat",
+      "describe": "the ClusterIP Service fronts the model and answers /v1/chat/completions with a usage block, reached via a background port-forward — the completion through the cluster with the unchanged M3 client contract (Step 5)",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl wait --for=condition=Ready pod -l app=opsmate-model --timeout=180s >/dev/null 2>&1; ( kubectl port-forward service/opsmate-model 18080:8080 >/dev/null 2>&1 & echo $! > /tmp/m8-pf.pid ); sleep 4; OUT=$(curl -s --max-time 60 http://127.0.0.1:18080/v1/chat/completions -H 'Content-Type: application/json' -d '{\"model\":\"qwen3-0.6b\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}' | jq -r 'if .usage.total_tokens then \"chat-ok\" else \"chat-fail\" end' 2>/dev/null); kill \"$(cat /tmp/m8-pf.pid 2>/dev/null)\" 2>/dev/null; rm -f /tmp/m8-pf.pid; echo \"$OUT\"",
+      "assert": {
+        "contains": "chat-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "bad-liveness-exhibit-present",
+      "describe": "the deliberately-wrong probe patch exists for the restart-loop demo — no startupProbe plus an aggressive liveness (Step 6). The exhibit that shows the self-inflicted CrashLoopBackOff",
+      "run": "F=labs/opsmate/k8s/bad-liveness.yaml; if [ -s \"$F\" ] && grep -q 'startupProbe: null' \"$F\" && grep -q 'failureThreshold: 1' \"$F\"; then echo bad-liveness-present; else echo bad-liveness-missing; fi",
+      "assert": {
+        "contains": "bad-liveness-present"
+      },
+      "weight": 1
+    },
+    {
+      "id": "vllm-variant-same-shape",
+      "describe": "the vLLM variant ships and is the same shape as the llama-server manifest — same PVC/initContainer/probes, differing only in image and args (Step 9). The engine fork as a two-file diff",
+      "run": "F=labs/opsmate/k8s/model-server-vllm.yaml; if grep -q 'vllm/vllm-openai' \"$F\" && grep -q 'initContainers' \"$F\" && grep -q 'startupProbe' \"$F\" && grep -q -- '--served-model-name' \"$F\"; then echo vllm-ok; else echo vllm-missing; fi",
+      "assert": {
+        "contains": "vllm-ok"
+      },
+      "weight": 1
+    }
+  ]
+}

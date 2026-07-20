@@ -1,0 +1,41 @@
+# =============================================================================
+# DELIBERATELY WRONG — the probe-failure exhibit for M8 Step 6. Do NOT copy this
+# into production; it exists to show you a failure mode so you never ship it.
+#
+# This is a strategic-merge patch that REPLACES the model server's liveness
+# probe with an aggressive one AND removes the startupProbe that protected the
+# slow load. The result is the classic model-server outage:
+#
+#   no startupProbe  -> liveness starts checking IMMEDIATELY at pod start
+#   1s period, 1 failure -> the probe fails while the 40 s model load is still
+#                           running, because /health is not up yet
+#   -> K8s decides the container is "dead", restarts it
+#   -> the restart begins loading the model AGAIN from scratch
+#   -> liveness fails again before it finishes -> restart -> loop forever
+#
+# You watch the RESTARTS column climb and the pod flap CrashLoopBackOff. The
+# engine was never broken; the probe never gave it time to load. This is why a
+# slow starter needs a startupProbe and a LENIENT liveness — the whole point of
+# the good manifest's probe block.
+#
+# Apply as a patch, watch it loop, then REVERT by re-applying the good manifest:
+#   kubectl --kubeconfig k8s/kubeconfig patch deployment opsmate-model \
+#     --patch-file k8s/bad-liveness.yaml
+#   kubectl --kubeconfig k8s/kubeconfig get pods -w        # watch RESTARTS climb
+#   kubectl --kubeconfig k8s/kubeconfig apply -f k8s/model-server.yaml   # revert
+# =============================================================================
+spec:
+  template:
+    spec:
+      containers:
+        - name: llama-server
+          # Remove the grace window: null out the startupProbe so liveness runs
+          # from second zero, during the load it was supposed to wait through.
+          startupProbe: null
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 1     # start probing almost immediately
+            periodSeconds: 1           # hammer it every second
+            failureThreshold: 1        # ONE miss = "dead" — no tolerance at all

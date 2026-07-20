@@ -19,7 +19,20 @@ REQUIRED_MB="${1:-2200}"   # M3 floor: llama-server ~1.5 GiB under a 2 GiB cap +
 MODEL_FILE="$(cd "$(dirname "$0")" && pwd)/models/gguf/${MODEL_GGUF:-qwen3-0.6b-q8_0.gguf}"
 
 # --- free memory, in MB, cross-platform ------------------------------------
+# The containers run wherever Docker runs. On macOS/Windows that is a fixed-size
+# VM whose memory is already carved out of the host — so when Docker answers, we
+# measure INSIDE the VM (that is the truth for container capacity), and only
+# fall back to host-side gauges when Docker itself is not up yet.
 free_mb() {
+  if command -v docker >/dev/null 2>&1; then
+    local vm_avail
+    vm_avail="$(docker run --rm alpine sh -c "free -m" 2>/dev/null \
+      | awk '/^Mem:/ {print $7}')"
+    if [ -n "${vm_avail:-}" ] && [ "$vm_avail" -gt 0 ] 2>/dev/null; then
+      echo "$vm_avail"
+      return
+    fi
+  fi
   if command -v vm_stat >/dev/null 2>&1; then
     # macOS: page size × (free + inactive + speculative) pages
     local page_size free_pages

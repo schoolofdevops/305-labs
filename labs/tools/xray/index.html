@@ -163,6 +163,24 @@
   .chunkCard.fed .fedTag{display:inline}
   #ragEmpty{color:var(--faint);font-size:.84rem;font-family:var(--mono)}
 
+  /* ---------- k8s lens (M8) ---------- */
+  body.lens-k8s #main,body.lens-k8s #bar,body.lens-k8s #engMain,body.lens-k8s #ragMain,body.lens-k8s #evMain,body.lens-k8s #trMain,body.lens-k8s #arMain{display:none}
+  #k8Main{display:none;flex:1 1 auto;min-height:0;grid-template-columns:1fr clamp(240px,21rem,340px);gap:6px}
+  body.lens-k8s #k8Main{display:grid}
+  #k8Left{display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto;scrollbar-width:thin}
+  #k8Offline{display:none;border:1px dashed rgba(245,185,66,.5);border-radius:9px;padding:10px 12px;
+    color:var(--warn);font-size:.9rem;line-height:1.5;background:rgba(245,185,66,.06)}
+  #k8Offline.show{display:block}
+  #k8Offline code{font-family:var(--mono);font-size:.84rem;color:var(--txt);background:rgba(255,255,255,.06);padding:0 4px;border-radius:4px}
+  .podRow{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.8rem;
+    border:1px solid var(--line);border-radius:7px;padding:4px 8px;background:var(--panel2)}
+  .podRow .pdot{width:.6rem;height:.6rem;border-radius:50%;flex:0 0 auto;background:var(--gray, #8494b3)}
+  .podRow.Running .pdot{background:var(--ok)} .podRow.Pending .pdot{background:var(--warn);animation:blink 1s infinite}
+  .podRow.Failed .pdot,.podRow.CrashLoopBackOff .pdot{background:var(--bad)}
+  .podRow .pname{flex:1;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .podRow .pphase{color:var(--dim)} .podRow .prst{color:var(--warn);font-weight:700}
+  .podRow .pready{color:var(--ok);font-size:.72rem}
+
   /* ---------- artifacts lens (M7) ---------- */
   body.lens-artifacts #main,body.lens-artifacts #bar,body.lens-artifacts #engMain,body.lens-artifacts #ragMain,body.lens-artifacts #evMain,body.lens-artifacts #trMain{display:none}
   #arMain{display:none;flex:1 1 auto;min-height:0;grid-template-columns:clamp(230px,20rem,320px) 1fr;gap:6px}
@@ -261,7 +279,7 @@
       <button class="tab" data-lens="evals">Evals</button>
       <button class="tab" data-lens="train">Train</button>
       <button class="tab" data-lens="artifacts">Artifacts</button>
-      <button class="tab stub" title="lands with M8">K8s<small>M8</small></button>
+      <button class="tab" data-lens="k8s">K8s</button>
       <button class="tab stub" title="lands with M10">Traces<small>M10</small></button>
       <button class="tab stub" title="lands with M12">Spend<small>M12</small></button>
     </div>
@@ -363,6 +381,40 @@
       <div class="panel" id="ragChunksPanel">
         <h2>Retrieved chunks — live from your index</h2>
         <div id="ragChunks"><span id="ragEmpty">no retrieval yet</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="k8Main">
+    <div id="k8Left">
+      <div id="k8Offline">
+        The cluster proxy is not reachable. Start it in another terminal —
+        <code>kubectl proxy --kubeconfig labs/opsmate/k8s/kubeconfig --port 8011</code> —
+        with the M8 cluster up (<code>make -C labs/opsmate k8s-up</code>). The K8s lens
+        reads your real cluster through it: the same same-origin trick, one hop further.
+      </div>
+      <div class="panel">
+        <h2>Pods — default namespace</h2>
+        <div id="k8Pods" style="display:flex;flex-direction:column;gap:4px"></div>
+      </div>
+      <div class="panel">
+        <h2>Serving deployment</h2>
+        <div class="row"><span class="lbl">ready replicas</span><span><span class="val hot" id="k8Ready">—</span></span></div>
+        <div class="row"><span class="lbl">updated / desired</span><span><span class="val" id="k8Upd">—</span></span></div>
+        <div class="row"><span class="lbl">node</span><span><span class="val" id="k8Node">—</span></span></div>
+      </div>
+    </div>
+    <div id="k8Right" style="display:flex;flex-direction:column;gap:6px;min-height:0">
+      <div class="panel">
+        <h2>Engine gauges — through the Service proxy</h2>
+        <div class="row"><span class="lbl">requests processing</span><span><span class="val hot" id="k8Proc">—</span></span></div>
+        <div class="row"><span class="lbl">requests deferred</span><span><span class="val" id="k8Def">—</span></span></div>
+        <div class="row"><span class="lbl">prompt tokens total</span><span><span class="val" id="k8PT">—</span></span></div>
+        <div class="row"><span class="lbl">predicted tokens total</span><span><span class="val" id="k8GT">—</span></span></div>
+      </div>
+      <div class="panel" style="flex:1 1 auto;display:flex;flex-direction:column;min-height:0">
+        <h2>Recent events</h2>
+        <div id="k8Events" style="flex:1;overflow-y:auto;font-family:var(--mono);font-size:.76rem;line-height:1.6;scrollbar-width:thin"></div>
       </div>
     </div>
   </div>
@@ -672,7 +724,7 @@
 
   /* ---------- presets: the two contrasting experiments from the lab ---------- */
   /* ---------- lens switching (M3+) ---------- */
-  const LENS_NAMES = { tokens: 'Tokens lens', engine: 'Engine lens', rag: 'RAG lens', evals: 'Evals lens', train: 'Train lens', artifacts: 'Artifacts lens' };
+  const LENS_NAMES = { tokens: 'Tokens lens', engine: 'Engine lens', rag: 'RAG lens', evals: 'Evals lens', train: 'Train lens', artifacts: 'Artifacts lens', k8s: 'K8s lens' };
   document.querySelectorAll('#tabs .tab[data-lens]').forEach(t => t.addEventListener('click', () => {
     document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
@@ -682,7 +734,72 @@
     if (lens === 'evals') loadEvals();
     if (lens === 'train') trPoll();
     if (lens === 'artifacts') loadArtifacts();
+    if (lens === 'k8s') k8Poll();
   }));
+
+  /* ---------- K8s lens (M8): the real cluster via kubectl proxy ---------- */
+  let k8Timer = null;
+  async function k8Json(path) {
+    const r = await fetch("/k8s" + path);
+    const d = await r.json();
+    if (d.error || d.kind === "Status" && d.status === "Failure") throw new Error(d.message || d.error);
+    return d;
+  }
+  async function k8Poll() {
+    if (!document.body.classList.contains("lens-k8s")) { clearTimeout(k8Timer); k8Timer = null; return; }
+    try {
+      const pods = await k8Json("/api/v1/namespaces/default/pods");
+      $("k8Offline").classList.remove("show");
+      const box = $("k8Pods");
+      box.innerHTML = "";
+      for (const p of pods.items || []) {
+        const phase = p.status.phase || "Unknown";
+        const waiting = ((p.status.containerStatuses || [])[0] || {}).state?.waiting?.reason;
+        const shown = waiting || phase;
+        const restarts = (p.status.containerStatuses || []).reduce((a, c) => a + (c.restartCount || 0), 0);
+        const ready = (p.status.containerStatuses || []).filter(c => c.ready).length + "/" + (p.spec.containers || []).length;
+        const row = document.createElement("div");
+        row.className = "podRow " + shown;
+        row.innerHTML = `<span class="pdot"></span><span class="pname"></span><span class="pready"></span><span class="pphase"></span><span class="prst"></span>`;
+        row.querySelector(".pname").textContent = p.metadata.name;
+        row.querySelector(".pready").textContent = ready;
+        row.querySelector(".pphase").textContent = shown;
+        row.querySelector(".prst").textContent = restarts ? restarts + "↺" : "";
+        box.appendChild(row);
+        $("k8Node").textContent = p.spec.nodeName || "—";
+      }
+      if (!(pods.items || []).length) box.innerHTML = '<span style="color:var(--faint);font-family:var(--mono);font-size:.8rem">no pods — apply the M8 manifests</span>';
+      try {
+        const dep = await k8Json("/apis/apps/v1/namespaces/default/deployments/opsmate-model");
+        $("k8Ready").textContent = String(dep.status.readyReplicas || 0);
+        $("k8Upd").textContent = `${dep.status.updatedReplicas || 0} / ${dep.spec.replicas || 0}`;
+      } catch (e) { $("k8Ready").textContent = "—"; $("k8Upd").textContent = "—"; }
+      try {
+        const r = await fetch("/k8s/api/v1/namespaces/default/services/opsmate-model:http/proxy/metrics");
+        const m = parseProm(await r.text());
+        setVal("k8Proc", String(m["llamacpp:requests_processing"] ?? "—"));
+        setVal("k8Def", String(m["llamacpp:requests_deferred"] ?? "—"));
+        setVal("k8PT", String(m["llamacpp:prompt_tokens_total"] ?? "—"));
+        setVal("k8GT", String(m["llamacpp:tokens_predicted_total"] ?? "—"));
+      } catch (e) { ["k8Proc","k8Def","k8PT","k8GT"].forEach(id => $(id).textContent = "—"); }
+      try {
+        const evs = await k8Json("/api/v1/namespaces/default/events?limit=15");
+        const box2 = $("k8Events");
+        box2.innerHTML = "";
+        for (const e of (evs.items || []).slice(-10).reverse()) {
+          const div = document.createElement("div");
+          div.textContent = `${e.reason || ""} · ${(e.involvedObject || {}).name || ""} — ${(e.message || "").slice(0, 90)}`;
+          div.style.color = e.type === "Warning" ? "var(--warn)" : "var(--dim)";
+          box2.appendChild(div);
+        }
+      } catch (e) {}
+    } catch (e) {
+      $("k8Offline").classList.add("show");
+      $("k8Pods").innerHTML = "";
+      ["k8Ready","k8Upd","k8Node","k8Proc","k8Def","k8PT","k8GT"].forEach(id => $(id).textContent = "—");
+    }
+    k8Timer = setTimeout(k8Poll, 3000);
+  }
 
   /* ---------- Artifacts lens (M7): browse the real Zot registry ---------- */
   const fmtBytes = n => n >= 1e9 ? (n/1e9).toFixed(2)+" GB" : n >= 1e6 ? (n/1e6).toFixed(1)+" MB" : n >= 1e3 ? (n/1e3).toFixed(1)+" kB" : n+" B";

@@ -1,0 +1,150 @@
+# =============================================================================
+# OpsMate model server on Kubernetes — the vLLM variant (PRODUCTION engine path).
+#
+# HONEST ARCH FORK — read this before you apply anything:
+#   vLLM is the engine you run in production. Its home is the GPU; its CPU build
+#   is a compatibility path. On the arm64 / 8 GB laptop this course targets, the
+#   vLLM CPU image BOOTS but CRASHES on inference on that VM kernel — the same
+#   result M3 measured across five configs, and a KIND pod runs on the identical
+#   kernel, so it does not change. THEREFORE:
+#     - arm64 / 8 GB learners  : READ this manifest, apply model-server.yaml
+#                                (llama-server) instead, and watch the recorded
+#                                vLLM demo. Everything below is validated on ->
+#     - x86_64 / 16 GB+ / cloud/GPU : APPLY this file. It serves the same model
+#                                behind the same OpenAI /v1 contract, so the M3
+#                                client reaches it UNCHANGED.
+#
+# This file is deliberately the SAME SHAPE as model-server.yaml. Diff the two
+# and the only real differences are the container image and its args — that is
+# the whole lesson: swapping the serving engine is an image + args change, not a
+# manifest rewrite, because the OpenAI contract holds the client stable.
+#
+# Apply (x86 path) with the isolated kubeconfig:
+#   kubectl --kubeconfig k8s/kubeconfig apply -f k8s/model-server-vllm.yaml
+# =============================================================================
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opsmate-model-vllm
+  labels:
+    app: opsmate-model-vllm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # vLLM reads the SAFETENSORS side of the engine-format matrix (M2), not the
+      # GGUF. The safetensors model dir is ~1.4 GB, so the PVC is larger here.
+      storage: 4Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsmate-model-vllm
+  labels:
+    app: opsmate-model-vllm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsmate-model-vllm
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: opsmate-model-vllm
+    spec:
+      hostAliases:
+        - ip: "192.168.5.2"          # <-- node-resolved host IP (verify on your box)
+          hostnames:
+            - "registry.local"
+      initContainers:
+        # Same advance-man pattern, same signed kit — but --filter pulls the
+        # safetensors model layer vLLM needs. (In this course the safetensors
+        # variant is fetched from HF into the kit; on the x86 path the lab step
+        # materialises it exactly as M3 Step 7 did.)
+        - name: fetch-model
+          image: ghcr.io/kitops-ml/kitops:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              if [ -d /model/qwen3-0.6b ] && [ -n "$(ls -A /model/qwen3-0.6b 2>/dev/null)" ]; then
+                echo "safetensors model already present on PVC — skipping unpack"
+                exit 0
+              fi
+              echo "unpacking signed ModelKit opsmate/model:1.0.0 (model layer) ..."
+              kit unpack registry.local:5100/opsmate/model:1.0.0 \
+                --filter=model -d /tmp/kit --plain-http
+              mkdir -p /model/qwen3-0.6b
+              cp -r /tmp/kit/models/* /model/qwen3-0.6b/
+          volumeMounts:
+            - name: model-store
+              mountPath: /model
+      containers:
+        - name: vllm
+          # The production engine. Same served-model-name, same /v1 API surface as
+          # llama-server — only the image and the flag names differ.
+          image: vllm/vllm-openai:latest
+          args:
+            - "--model"
+            - "/model/qwen3-0.6b"      # the safetensors dir the initContainer placed
+            - "--served-model-name"
+            - "qwen3-0.6b"             # the SAME client-facing name — client unchanged
+            - "--max-model-len"
+            - "2048"                   # vLLM's word for the context/KV budget (M1)
+          ports:
+            - name: http
+              containerPort: 8000      # vLLM's default port (llama-server used 8080)
+          resources:
+            # vLLM's PagedAttention manages KV in blocks and pre-reserves a KV pool,
+            # so its working set runs higher than llama-server's for the same model.
+            # On a GPU box these become nvidia.com/gpu requests too (see the deep dive).
+            requests:
+              memory: "3Gi"
+              cpu: "2"
+            limits:
+              memory: "6Gi"
+              cpu: "4"
+          startupProbe:
+            # vLLM's engine bring-up (CUDA graph capture on GPU, KV pool alloc) can
+            # run LONGER than llama-server's load, so the grace window is wider.
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60       # 60 * 5s = 300 s — vLLM cold start is slower
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: model-store
+          persistentVolumeClaim:
+            claimName: opsmate-model-vllm
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsmate-model-vllm
+  labels:
+    app: opsmate-model-vllm
+spec:
+  selector:
+    app: opsmate-model-vllm
+  ports:
+    - name: http
+      port: 8080                  # SAME Service port as the llama-server variant, so
+                                  # callers dial opsmate-model-vllm:8080 either way ...
+      targetPort: http            # ... forwarded to vLLM's 8000 container port
+  type: ClusterIP

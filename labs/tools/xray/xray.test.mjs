@@ -160,9 +160,9 @@ async function main() {
   ok('loads: no console errors', consoleErrors.length === 0, consoleErrors.join(' | '));
   ok('loads: no page exceptions', pageErrors.length === 0, pageErrors.join(' | '));
   ok('loads: zero non-same-origin requests', externalReqs.length === 0, externalReqs.join(' | '));
-  ok('lens tabs: 1 active + 6 live lenses + 3 stubs', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
-      && await ev('document.querySelectorAll("#tabs .tab[data-lens]").length') === 6
-      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 3);
+  ok('lens tabs: 1 active + 7 live lenses + 2 stubs', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
+      && await ev('document.querySelectorAll("#tabs .tab[data-lens]").length') === 7
+      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 2);
 
   // ---------- 2. real connection state ----------
   await waitFor('document.getElementById("connInd").className === "connected"', 12000, 'conn: indicator connected');
@@ -289,6 +289,18 @@ async function main() {
   ok('artifacts: layer sizes visible incl. the model layer', /MB|GB/.test(await ev('document.getElementById("arLayers").textContent')));
   ok('artifacts: config digest shown', /sha256:/.test(await gauge('arDigest')));
   ok('artifacts: offline banner hidden', !(await ev('document.getElementById("arOffline").classList.contains("show")')));
+
+  // ---------- 11. K8s lens (M8) — the real cluster via kubectl proxy ----------
+  await ev('document.querySelector("#tabs .tab[data-lens=k8s]").click()');
+  ok('k8s: lens switches (panel visible)',
+    (await ev('document.body.classList.contains("lens-k8s")')) === true
+    && (await ev('getComputedStyle(document.getElementById("k8Main")).display')) === 'grid');
+  await waitFor('document.querySelectorAll("#k8Pods .podRow").length >= 1', 15000, 'k8s: pod rows load');
+  ok('k8s: model pod Running with ready count', (await ev('[...document.querySelectorAll("#k8Pods .podRow")].some(r => r.textContent.includes("opsmate-model") && r.classList.contains("Running"))')) === true);
+  await waitFor('document.getElementById("k8Ready").textContent === "1"', 10000, 'k8s: deployment ready replicas');
+  ok('k8s: engine gauges through the Service proxy', /^\d+$/.test(await gauge('k8PT')), await gauge('k8PT'));
+  ok('k8s: node name shown', (await gauge('k8Node')).includes('opsmate'), await gauge('k8Node'));
+  ok('k8s: offline banner hidden', !(await ev('document.getElementById("k8Offline").classList.contains("show")')));
 
   // switch back for the screenshot
   await ev('document.querySelector("#tabs .tab[data-lens=tokens]").click()');

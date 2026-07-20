@@ -11,7 +11,7 @@ no fake numbers — and grows one lens per module.
 | **Evals** | M5 | The course scoreboard: retrieval tripwire (N/24), the three generation arms (no-RAG / v1 / v2) as bars, the RAG-vs-no-RAG gap, honesty-refusal count, and the per-question pass/fail grid — read live from the eval JSONs your runs write |
 | **Train** | M6 | Tails your real `train/progress.jsonl` live: loss curve for the whole run, step/lr/elapsed/sec-per-step gauges, first-vs-latest loss, and the run-complete summary banner |
 | **Artifacts** | M7 | Browses your real Zot registry: repos and tags with per-tag SIGNED/unsigned badges (OCI referrers API, sigstore-aware), and per-tag layer tables showing the 610 MB model layer against the KB-sized prompt/dataset layers |
-| K8s | M8 | _lands with M8_ |
+| **K8s** | M8 | Your real cluster via `kubectl proxy` (same-origin, one hop further): pods with phase/ready/restarts, the serving Deployment's replica status, the engine gauges scraped through the Service proxy, and recent events |
 | Traces | M10 | _lands with M10_ |
 | Spend | M12 | _lands with M12_ |
 

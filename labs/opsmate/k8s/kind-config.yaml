@@ -1,0 +1,13 @@
+# OpsMate KIND cluster — slim single-node profile for the 8 GB path (M8+).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: opsmate
+nodes:
+  - role: control-plane
+containerdConfigPatches:
+  # Reach the course's local Zot registry (M7) from inside the cluster.
+  # host.docker.internal resolves from the kind node container on Docker Desktop;
+  # Rancher Desktop maps the host under its own alias — both patched here.
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:5100"]
+      endpoint = ["http://host.docker.internal:5100"]

@@ -1,0 +1,31 @@
+{
+  "checks": [
+    {
+      "id": "startupprobe-budget-readable",
+      "describe": "the live model pod exposes a startupProbe whose failureThreshold x periodSeconds is the load budget — read off the running pod (Deep Dive: startupProbe anatomy). Self-seeds the cluster + deploy",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; bash labs/m7/seed.sh >/dev/null 2>&1 || true; kubectl get deploy opsmate-model >/dev/null 2>&1 || kubectl apply -f labs/opsmate/k8s/model-server.yaml >/dev/null 2>&1; kubectl wait --for=condition=Ready pod -l app=opsmate-model --timeout=180s >/dev/null 2>&1; FT=$(kubectl get pod -l app=opsmate-model -o jsonpath='{.items[0].spec.containers[0].startupProbe.failureThreshold}' 2>/dev/null); PS=$(kubectl get pod -l app=opsmate-model -o jsonpath='{.items[0].spec.containers[0].startupProbe.periodSeconds}' 2>/dev/null); if [ -n \"$FT\" ] && [ -n \"$PS\" ] && [ \"$FT\" -ge 10 ] 2>/dev/null && [ $((FT*PS)) -ge 90 ] 2>/dev/null; then echo budget-ok; else echo budget-too-tight; fi",
+      "assert": {
+        "contains": "budget-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "health-green-under-queue",
+      "describe": "under load the engine queues (requests_deferred is exposed) while /health stays green — the Service-backpressure disconnect: readiness is binary, the metric is the graded signal (Deep Dive: Service backpressure). Self-seeds; uses a background port-forward",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl wait --for=condition=Ready pod -l app=opsmate-model --timeout=180s >/dev/null 2>&1; ( kubectl port-forward service/opsmate-model 18081:8080 >/dev/null 2>&1 & echo $! > /tmp/m8-dd-pf.pid ); sleep 4; H=$(curl -s --max-time 5 http://127.0.0.1:18081/health | jq -r .status 2>/dev/null); M=$(curl -s --max-time 5 http://127.0.0.1:18081/metrics | grep -c '^llamacpp:requests_deferred'); kill \"$(cat /tmp/m8-dd-pf.pid 2>/dev/null)\" 2>/dev/null; rm -f /tmp/m8-dd-pf.pid; if [ \"$H\" = \"ok\" ] && [ \"$M\" -ge 1 ]; then echo health-green-metric-present; else echo signal-missing; fi",
+      "assert": {
+        "contains": "health-green-metric-present"
+      },
+      "weight": 2
+    },
+    {
+      "id": "priorityclasses-register",
+      "describe": "the serving vs batch PriorityClasses apply and carry the right values — serving high (preempts batch), batch low (yields under pressure) — the M11 setup (Deep Dive: PriorityClass). Applies and cleans up its own resources",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; printf 'apiVersion: scheduling.k8s.io/v1\\nkind: PriorityClass\\nmetadata:\\n  name: model-serving\\nvalue: 1000000\\nglobalDefault: false\\n---\\napiVersion: scheduling.k8s.io/v1\\nkind: PriorityClass\\nmetadata:\\n  name: batch-inference\\nvalue: 1000\\nglobalDefault: false\\n' | kubectl apply -f - >/dev/null 2>&1; SV=$(kubectl get priorityclass model-serving -o jsonpath='{.value}' 2>/dev/null); BV=$(kubectl get priorityclass batch-inference -o jsonpath='{.value}' 2>/dev/null); kubectl delete priorityclass model-serving batch-inference >/dev/null 2>&1; if [ \"$SV\" = \"1000000\" ] && [ \"$BV\" = \"1000\" ] && [ \"$SV\" -gt \"$BV\" ] 2>/dev/null; then echo priority-ok; else echo priority-bad; fi",
+      "assert": {
+        "contains": "priority-ok"
+      },
+      "weight": 2
+    }
+  ]
+}

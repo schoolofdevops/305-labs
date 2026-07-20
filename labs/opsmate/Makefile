@@ -16,7 +16,16 @@ COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compos
 HEALTH_URL ?= http://127.0.0.1:8080/health
 WAIT_SECONDS ?= 90
 
-.PHONY: up down preflight registry-catalog
+# --- KIND phase (M8+) settings ---------------------------------------------
+# The Kubernetes phase runs its cluster with an ISOLATED kubeconfig so the lab
+# never touches your default context. Every k8s target below writes/reads this
+# file (gitignored). The cluster name matches kind-config.yaml.
+KUBECONFIG_FILE ?= k8s/kubeconfig
+KIND_CLUSTER    ?= opsmate
+K8S_FREE_MB     ?= 3000       # KIND control-plane + one model pod need more headroom
+                              # than the Compose model service — a higher floor here.
+
+.PHONY: up down preflight registry-catalog k8s-up k8s-down
 
 preflight:
 	@bash preflight.sh
@@ -68,3 +77,45 @@ down:
 	@echo "==> Stopping the OpsMate stack ..."
 	@$(COMPOSE) down
 	@echo "    Stopped. The GGUF model file on disk stays for the next module."
+
+# ============================================================================
+# KIND phase (M8-M13). The Compose verbs above are the Compose phase; these are
+# the Kubernetes phase. ONE stack at a time — bring the Compose stack down
+# (`make down`) before `make k8s-up`. The only Compose service that runs
+# alongside KIND is `registry` (it IS the model source), started here.
+#
+#   make k8s-up    free-mem preflight -> ensure registry is up (model source)
+#                  -> kind create (isolated kubeconfig) -> wait node Ready
+#   make k8s-down  kind delete (registry data on ./data/zot PERSISTS)
+# ============================================================================
+k8s-up:
+	@echo "==> KIND preflight (free memory) ..."
+	@bash preflight.sh $(K8S_FREE_MB) || { \
+	  echo "    Not enough free memory for the KIND phase. Close apps and retry."; exit 1; }
+	@echo "==> Ensuring the registry (model source) is up on localhost:5100 ..."
+	@mkdir -p ./data/zot
+	@curl -fsS http://localhost:5100/v2/_catalog >/dev/null 2>&1 || $(COMPOSE) up -d registry
+	@i=0; while [ $$i -lt 20 ]; do \
+	  curl -fsS http://localhost:5100/v2/_catalog >/dev/null 2>&1 && break; \
+	  sleep 1; i=$$((i+1)); done
+	@curl -fsS http://localhost:5100/v2/_catalog >/dev/null 2>&1 || \
+	  { echo "    Registry did not come up — M7 kits are the model source; run M7 first."; exit 1; }
+	@echo "==> Creating the slim KIND cluster '$(KIND_CLUSTER)' (isolated kubeconfig: $(KUBECONFIG_FILE)) ..."
+	@if kind get clusters 2>/dev/null | grep -qx "$(KIND_CLUSTER)"; then \
+	  echo "    Cluster '$(KIND_CLUSTER)' already exists — reusing it."; \
+	  kind export kubeconfig --name "$(KIND_CLUSTER)" --kubeconfig "$(KUBECONFIG_FILE)"; \
+	else \
+	  kind create cluster --config k8s/kind-config.yaml --kubeconfig "$(KUBECONFIG_FILE)"; \
+	fi
+	@echo "==> Waiting for the node to report Ready (up to 120s) ..."
+	@kubectl --kubeconfig "$(KUBECONFIG_FILE)" wait --for=condition=Ready nodes --all --timeout=120s
+	@echo "    Node Ready. Cluster is up. Your default context was NOT touched."
+	@echo "    Use it with:  kubectl --kubeconfig $(KUBECONFIG_FILE) get nodes"
+
+k8s-down:
+	@echo "==> Deleting the KIND cluster '$(KIND_CLUSTER)' ..."
+	@kind delete cluster --name "$(KIND_CLUSTER)" || true
+	@rm -f "$(KUBECONFIG_FILE)"
+	@echo "    Cluster gone. The registry and its data on ./data/zot PERSIST — the"
+	@echo "    signed kits survive, so the next module re-creates the cluster and"
+	@echo "    pulls the same 1.0.0 artifact. (Cluster create is ~30s — cheap by design.)"
