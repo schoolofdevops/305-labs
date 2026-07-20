@@ -1,0 +1,53 @@
+# =============================================================================
+# Gateway API Inference Extension / llm-d — the frontier read-along sample.
+#
+# NOT applied here. This is the shape of the frontier the Deep Dive briefs: a
+# Gateway (the standard Kubernetes ingress API) fronting an InferencePool of
+# model-server pods, with an inference-AWARE routing extension that picks the pod
+# by KV-cache locality and prompt-prefix affinity — not by a blind per-request
+# hash the way the M9 nginx split_clients did.
+#
+# The disaggregation callback to M1: prefill (read the whole prompt, build the KV
+# cache — compute-bound) and decode (emit tokens one at a time off that cache —
+# memory-bandwidth-bound) are M1's two phases. At scale llm-d runs them as TWO
+# pools so each is sized and scaled for its own bottleneck, and the router sends a
+# request's decode to the pod that already holds its prefill KV. That routing
+# decision is what the nginx router fundamentally cannot make.
+# =============================================================================
+apiVersion: inference.networking.x-k8s.io/v1alpha2
+kind: InferencePool
+metadata:
+  name: opsmate-pool
+spec:
+  # The pods this pool routes across — an inference-aware endpoint-picker sits in
+  # front and chooses among them by KV-cache and prefix affinity, not round-robin.
+  selector:
+    app: opsmate-model
+  targetPortNumber: 8080
+  extensionRef:
+    # The endpoint-picker extension: the component that makes routing KV-aware.
+    # This is the piece with no analog in the M9 nginx router.
+    name: opsmate-endpoint-picker
+---
+# The two disaggregated pools — M1's two phases as two independently-scaled fleets.
+apiVersion: inference.networking.x-k8s.io/v1alpha2
+kind: InferencePool
+metadata:
+  name: opsmate-prefill-pool     # compute-bound: builds the KV cache from the prompt
+  labels:
+    llm-d.ai/role: prefill
+spec:
+  selector:
+    llm-d.ai/role: prefill
+  targetPortNumber: 8080
+---
+apiVersion: inference.networking.x-k8s.io/v1alpha2
+kind: InferencePool
+metadata:
+  name: opsmate-decode-pool      # bandwidth-bound: emits tokens off the KV cache
+  labels:
+    llm-d.ai/role: decode
+spec:
+  selector:
+    llm-d.ai/role: decode
+  targetPortNumber: 8080

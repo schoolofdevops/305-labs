@@ -1,0 +1,35 @@
+# =============================================================================
+# KServe InferenceService — the read-along sample (NOT applied on the 8 GB path).
+#
+# This is what the M9 router did BY HAND, expressed as one declarative object.
+# The two weight lines you edited in an nginx ConfigMap become a single field:
+# `canaryTrafficPercent`. KServe (via Knative) runs both revisions, splits
+# traffic by that percent, and can scale either to zero. The cost is the
+# dependency stack (Knative Serving + a networking layer + cert-manager) — which
+# is exactly why this course surveys it rather than installing it on a laptop.
+#
+# On a 16 GB+ / cloud cluster with KServe installed you would apply this with
+# `kubectl apply -f` and read the split with `kubectl get inferenceservice`.
+# Here it is a read: match each field to the manual mechanic it replaces.
+# =============================================================================
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: opsmate
+spec:
+  predictor:
+    # canaryTrafficPercent IS the split. 10 here == the nginx `10% canary` line —
+    # but declared, reconciled, and rolled forward/back by the controller instead
+    # of an edit + rollout restart. Raise it in stages (10 -> 50 -> 100) exactly
+    # like the M9 weight ladder; the controller shifts Knative revision weights.
+    canaryTrafficPercent: 10
+    model:
+      modelFormat:
+        name: gguf
+      # The candidate revision's artifact. The base (last-good) revision is the
+      # previously-reconciled spec KServe keeps serving the other 90%.
+      storageUri: oci://registry.local:5100/opsmate/model:1.0.0-candidate
+    # Scale-to-zero: minReplicas 0 lets an idle model release its node. The router
+    # pattern cannot do this — an nginx upstream with no pod behind it just 502s.
+    minReplicas: 0
+    maxReplicas: 3

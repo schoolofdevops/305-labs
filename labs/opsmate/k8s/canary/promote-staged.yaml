@@ -1,0 +1,54 @@
+# =============================================================================
+# Staged promotion — the weight ladder, documented.
+#
+# There is no new Kubernetes object here. Promotion (and rollback) is a change to
+# the TWO weight lines in router.yaml's ConfigMap, applied in stages, with a
+# rollout restart and a re-measure between each step. This file is the runbook
+# for that ladder — copy the `split_clients` block you want, edit router.yaml,
+# apply, restart, measure.
+#
+# THE LADDER (each rung: edit -> apply -> rollout restart -> re-measure the gate)
+#
+#   ROLLBACK to 0% (kill the canary — what the M9 lab does, because the candidate
+#   lost). nginx rejects a literal "0%" bucket, so 0% is expressed by DROPPING the
+#   canary line entirely — everything falls through to the * (base) bucket:
+#     split_clients "${request_id}" $backend_pool {
+#       # canary line removed -> 0% to canary
+#       *       base;          # 100% base — the canary receives nothing
+#     }
+#
+#   STAGE 1 — toe in the water (10%):
+#     split_clients "${request_id}" $backend_pool {
+#       10%     canary;
+#       *       base;
+#     }
+#
+#   STAGE 2 — half and half (50%), only AFTER stage 1's gate passed:
+#     split_clients "${request_id}" $backend_pool {
+#       50%     canary;
+#       *       base;
+#     }
+#
+#   STAGE 3 — full promotion (100%), only AFTER stage 2 held:
+#     split_clients "${request_id}" $backend_pool {
+#       100%    canary;
+#       *       base;          # the * bucket now catches nothing — canary is it
+#     }
+#
+# THE RULE (the school-van analogy from the lesson): you do not hand the new
+# driver the school van on day one. Weeks on the delivery van (10%), then a light
+# route (50%), then the children (100%) — and you can pull them back a rung the
+# moment a report comes in. Each rung is a gate: promote only on GREEN, and the
+# gate is DATA (the golden set), not the absence of a crash.
+#
+# After each edit:
+#   kubectl --kubeconfig k8s/kubeconfig apply -f k8s/canary/router.yaml
+#   kubectl --kubeconfig k8s/kubeconfig rollout restart deploy/opsmate-router
+#   kubectl --kubeconfig k8s/kubeconfig rollout status  deploy/opsmate-router
+#   # then re-run labs/m9/canary_gate.py and read the split (labs/m9/README.md)
+#
+# WHY STAGES AND NOT A JUMP TO 100%: at each rung the blast radius is bounded —
+# if the candidate is worse, only that fraction of traffic saw it, and you learn
+# it from the gate before the next rung. A jump to 100% bets every user on a
+# model your golden set has not yet confirmed in production traffic.
+# =============================================================================

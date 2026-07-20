@@ -1,0 +1,94 @@
+{
+  "checks": [
+    {
+      "id": "kind-cluster-node-ready",
+      "describe": "the slim KIND cluster is up and its node reports Ready via the isolated kubeconfig (Step 1). Self-seeds with make k8s-up if absent",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; kubectl get nodes 2>/dev/null | grep -c ' Ready ' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo node-ready; else echo node-not-ready; fi'",
+      "assert": {
+        "contains": "node-ready"
+      },
+      "weight": 2
+    },
+    {
+      "id": "candidate-tag-present",
+      "describe": "the registry holds opsmate/model:1.0.0-candidate — the M6 loser the canary serves (Step 2, the M6/M7 seam). Self-seeds the registry + push via the M7 seed",
+      "run": "bash labs/m7/seed.sh >/dev/null 2>&1 || true; T=$(curl -fsS --max-time 5 http://localhost:5100/v2/opsmate/model/tags/list 2>/dev/null); if echo \"$T\" | grep -q '1.0.0-candidate'; then echo candidate-present; else echo candidate-missing; fi",
+      "assert": {
+        "contains": "candidate-present"
+      },
+      "weight": 2
+    },
+    {
+      "id": "canary-manifest-designed-exhibit",
+      "describe": "canary-server.yaml is the M8-shaped canary: its initContainer pulls the 1.0.0-candidate tag, and it carries the designed wrong-filename exhibit (the base filename in the -m arg, fixed in Step 2) with a clearly marked FIX line (Step 2)",
+      "run": "F=labs/opsmate/k8s/canary/canary-server.yaml; if grep -q 'opsmate/model:1.0.0-candidate' \"$F\" && grep -q 'initContainers' \"$F\" && grep -q 'FIX ME' \"$F\" && grep -q 'qwen3-0.6b-q8_0.gguf' \"$F\"; then echo exhibit-ok; else echo exhibit-bad; fi",
+      "assert": {
+        "contains": "exhibit-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "base-and-canary-running",
+      "describe": "both backends are 1/1 Running: base opsmate-model (1.0.0) and the canary opsmate-canary (1.0.0-candidate). Self-seeds: cluster up, kits present, apply base, apply canary with the -m filename FIXED to the candidate's, wait Ready (Step 2, the crash resolved)",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; bash labs/m7/seed.sh >/dev/null 2>&1 || true; HIP=$(docker exec opsmate-control-plane getent hosts host.docker.internal 2>/dev/null | awk '{print $1}'); HIP=${HIP:-127.0.0.1}; sed \"s#ip: \\\"127.0.0.1\\\"#ip: \\\"$HIP\\\"#\" labs/opsmate/k8s/model-server.yaml | kubectl apply -f - >/dev/null 2>&1; sed -e 's#/model/models/gguf/qwen3-0.6b-q8_0.gguf#/model/models/gguf/opsmate-tuned-q8_0.gguf#' -e \"s#ip: \\\"127.0.0.1\\\"#ip: \\\"$HIP\\\"#\" labs/opsmate/k8s/canary/canary-server.yaml | kubectl apply -f - >/dev/null 2>&1; kubectl wait --for=condition=Ready pod -l app=opsmate-model --timeout=240s >/dev/null 2>&1; kubectl wait --for=condition=Ready pod -l app=opsmate-canary --timeout=240s >/dev/null 2>&1; B=$(kubectl get pods -l app=opsmate-model 2>/dev/null | grep -c '1/1 *Running'); C=$(kubectl get pods -l app=opsmate-canary 2>/dev/null | grep -c '1/1 *Running'); if [ \"$B\" -ge 1 ] && [ \"$C\" -ge 1 ]; then echo both-running; else echo not-both-running; fi",
+      "assert": {
+        "contains": "both-running"
+      },
+      "weight": 3
+    },
+    {
+      "id": "router-configmap-split-shape",
+      "describe": "router.yaml carries the split: an nginx split_clients ConfigMap weighting canary, the X-Served-By observability header, and a small nginx Deployment (Step 3)",
+      "run": "F=labs/opsmate/k8s/canary/router.yaml; if grep -q 'split_clients' \"$F\" && grep -q 'canary' \"$F\" && grep -q 'X-Served-By' \"$F\" && grep -q 'nginx' \"$F\"; then echo router-shape-ok; else echo router-shape-bad; fi",
+      "assert": {
+        "contains": "router-shape-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "router-deployed-and-splits",
+      "describe": "the router pod is up and the split reaches BOTH backends: over enough requests through the router, X-Served-By names base AND canary (Step 3/4). Self-seeds the router apply + a background port-forward, drives requests, counts distinct backends seen",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get deploy opsmate-router >/dev/null 2>&1 || kubectl apply -f labs/opsmate/k8s/canary/router.yaml >/dev/null 2>&1; kubectl wait --for=condition=Ready pod -l app=opsmate-router --timeout=120s >/dev/null 2>&1; ( kubectl port-forward service/opsmate-router 18090:8080 >/dev/null 2>&1 & echo $! > /tmp/m9-router-pf.pid ); sleep 4; SAW=$(for i in $(seq 1 60); do curl -s -o /dev/null -D - --max-time 10 http://127.0.0.1:18090/health 2>/dev/null | grep -i 'x-served-by' | tr -d '\\r'; done | awk '{print $2}' | sort -u | tr '\\n' ' '); kill \"$(cat /tmp/m9-router-pf.pid 2>/dev/null)\" 2>/dev/null; rm -f /tmp/m9-router-pf.pid; if echo \"$SAW\" | grep -q base && echo \"$SAW\" | grep -q canary; then echo split-reaches-both; else echo split-saw:\"$SAW\"; fi",
+      "assert": {
+        "contains": "split-reaches-both"
+      },
+      "weight": 3
+    },
+    {
+      "id": "completion-through-router",
+      "describe": "a real completion is served THROUGH the router — the OpenAI /v1 contract holds and a usage block comes back, X-Served-By names whichever backend answered (Step 4). Self-seeds a background port-forward to the router",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl wait --for=condition=Ready pod -l app=opsmate-router --timeout=120s >/dev/null 2>&1; ( kubectl port-forward service/opsmate-router 18091:8080 >/dev/null 2>&1 & echo $! > /tmp/m9-c-pf.pid ); sleep 4; OUT=$(curl -s --max-time 90 http://127.0.0.1:18091/v1/chat/completions -H 'Content-Type: application/json' -d '{\"model\":\"qwen3-0.6b\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}' | jq -r 'if .usage.total_tokens then \"router-chat-ok\" else \"router-chat-fail\" end' 2>/dev/null); kill \"$(cat /tmp/m9-c-pf.pid 2>/dev/null)\" 2>/dev/null; rm -f /tmp/m9-c-pf.pid; echo \"$OUT\"",
+      "assert": {
+        "contains": "router-chat-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "quality-gate-produces-verdict",
+      "describe": "the quality gate runs the golden generation questions against BOTH backends directly and prints a data-driven verdict (PROMOTE or ROLLBACK) — the module climax (Step 5). Self-seeds two background port-forwards; asserts the gate ran and reached a verdict, not a specific direction (candidate is the M6 loser so expect ROLLBACK, but the check tolerates either)",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl wait --for=condition=Ready pod -l app=opsmate-model --timeout=180s >/dev/null 2>&1; kubectl wait --for=condition=Ready pod -l app=opsmate-canary --timeout=180s >/dev/null 2>&1; ( kubectl port-forward service/opsmate-model 18092:8080 >/dev/null 2>&1 & echo $! > /tmp/m9-b.pid ); ( kubectl port-forward service/opsmate-canary 18093:8080 >/dev/null 2>&1 & echo $! > /tmp/m9-k.pid ); sleep 4; V=$(uv run labs/m9/canary_gate.py --base http://127.0.0.1:18092/v1 --canary http://127.0.0.1:18093/v1 --n 4 2>/dev/null | grep -Eo 'VERDICT: (PROMOTE|ROLLBACK)' | head -1); kill \"$(cat /tmp/m9-b.pid 2>/dev/null)\" \"$(cat /tmp/m9-k.pid 2>/dev/null)\" 2>/dev/null; rm -f /tmp/m9-b.pid /tmp/m9-k.pid; if echo \"$V\" | grep -q 'VERDICT:'; then echo gate-verdict-produced; else echo gate-no-verdict; fi",
+      "assert": {
+        "contains": "gate-verdict-produced"
+      },
+      "weight": 3
+    },
+    {
+      "id": "rollback-weight-zero-flow",
+      "describe": "the rollback is a documented, applied flow: the staged-promotion runbook exists with the 0% (kill the canary) and the 10/50/100 ladder, and it names the rollout-restart step a ConfigMap edit needs to take effect (Step 6)",
+      "run": "F=labs/opsmate/k8s/canary/promote-staged.yaml; if grep -q '0%' \"$F\" && grep -q '50%' \"$F\" && grep -q '100%' \"$F\" && grep -q 'rollout restart' \"$F\"; then echo rollback-flow-ok; else echo rollback-flow-bad; fi",
+      "assert": {
+        "contains": "rollback-flow-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "decision-tree-artifact-present",
+      "describe": "the serving decision tree capstone artifact is present and walks all four patterns (Deployment, router+canary, KServe, llm-d) with when-each-pays (Step 7, stays after teardown)",
+      "run": "F=labs/opsmate/k8s/DECISION-TREE.md; if [ -s \"$F\" ] && grep -q 'Deployment' \"$F\" && grep -q 'canary' \"$F\" && grep -q 'KServe' \"$F\" && grep -q 'llm-d' \"$F\"; then echo tree-present; else echo tree-missing; fi",
+      "assert": {
+        "contains": "tree-present"
+      },
+      "weight": 1
+    }
+  ]
+}

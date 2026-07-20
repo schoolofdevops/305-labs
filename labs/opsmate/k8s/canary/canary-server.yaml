@@ -1,0 +1,177 @@
+# =============================================================================
+# OpsMate CANARY model server — the SECOND backend behind the router.
+#
+# This is the M8 model-server.yaml pattern, cloned for a DIFFERENT model version:
+# it serves `opsmate/model:1.0.0-candidate` — the M6 tune that was measured,
+# LOST to the baseline, and kept in the registry as honest history. In M9 you
+# route 10% of real traffic to it and let the golden set decide its fate.
+#
+# It is deliberately its OWN Deployment + Service (opsmate-canary), sitting
+# beside the base opsmate-model from M8. Two independent backends, two Services,
+# one router in front (router.yaml) splitting traffic between them. That is the
+# canary pattern: base holds the traffic, the candidate gets a thin slice.
+#
+# THE DESIGNED EXHIBIT (read this before you apply): the `-m` arg below points at
+# the BASE model's filename — the copy-paste you would make cloning M8's manifest.
+# But this kit is the CANDIDATE, whose model layer unpacks to a DIFFERENT file
+# (opsmate-tuned-q8_0.gguf, not qwen3-0.6b-q8_0.gguf). So llama-server will start,
+# find nothing at the path, and CrashLoopBackOff. The lab walks you through
+# reading that model-load error and fixing the one line marked FIX ME. Every kit
+# carries its own packed filename — you cannot assume it.
+#
+# Apply with the ISOLATED kubeconfig (never your default context):
+#   kubectl --kubeconfig k8s/kubeconfig apply -f k8s/canary/canary-server.yaml
+# =============================================================================
+---
+# A SEPARATE PVC — the candidate's model is a different file from the base, so it
+# gets its own volume. Never share a PVC between two model versions: the whole
+# point of a canary is that the two backends are independent and you can kill one
+# without disturbing the other.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opsmate-canary
+  labels:
+    app: opsmate-canary
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsmate-canary
+  labels:
+    app: opsmate-canary
+    role: canary          # the label the router's canary upstream selects on
+spec:
+  replicas: 1             # a canary is one pod — it takes a slice of traffic,
+                          # not a share of the fleet. You do not scale a canary.
+  selector:
+    matchLabels:
+      app: opsmate-canary
+  strategy:
+    type: Recreate        # single ReadWriteOnce PVC — same reason as the base
+  template:
+    metadata:
+      labels:
+        app: opsmate-canary
+        role: canary
+    spec:
+      # Same two-paths fix as M8: pin registry.local to the node-resolved host IP.
+      # Use the SAME IP you discovered and set in model-server.yaml in M8 — it is
+      # host-specific (docker exec opsmate-control-plane getent hosts host.docker.internal).
+      hostAliases:
+        - ip: "127.0.0.1"            # <-- set to YOUR getent result, same as model-server.yaml
+          hostnames:
+            - "registry.local"
+      initContainers:
+        # The advance man, pointed at the CANDIDATE tag. It unpacks only the model
+        # layer of opsmate/model:1.0.0-candidate onto this PVC. Note the tag — this
+        # is the ONE line that makes this the canary and not a second base pod.
+        - name: fetch-model
+          image: ghcr.io/kitops-ml/kitops:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              # Idempotency guard: the candidate's model layer packs as
+              # opsmate-tuned-q8_0.gguf (NOT the base filename). If it is already
+              # on the PVC, skip the pull.
+              if [ -f /model/models/gguf/opsmate-tuned-q8_0.gguf ]; then
+                echo "candidate model already present on PVC — skipping unpack"
+                exit 0
+              fi
+              echo "unpacking ModelKit opsmate/model:1.0.0-candidate (model layer only) ..."
+              kit unpack registry.local:5100/opsmate/model:1.0.0-candidate \
+                --filter=model -d /tmp/kit --plain-http
+              mkdir -p /model/models
+              cp -r /tmp/kit/models/* /model/models/
+              echo "candidate model on PVC:"
+              ls -lh /model/models/gguf/
+          volumeMounts:
+            - name: model-store
+              mountPath: /model
+      containers:
+        - name: llama-server
+          image: ghcr.io/ggml-org/llama.cpp:server
+          args:
+            - "-m"
+            # ┌──────────────────────────── THE DESIGNED EXHIBIT ────────────────
+            # │ WRONG on purpose. This is the BASE model's filename, copy-pasted
+            # │ from M8's model-server.yaml. This kit is the CANDIDATE, which
+            # │ unpacks to models/gguf/opsmate-tuned-q8_0.gguf. llama-server will
+            # │ not find a file here and the pod will CrashLoopBackOff.
+            # │ FIX ME (Lab Step 2): replace the line below with
+            # │   "/model/models/gguf/opsmate-tuned-q8_0.gguf"
+            # └──────────────────────────────────────────────────────────────────
+            - "/model/models/gguf/qwen3-0.6b-q8_0.gguf"   # <-- WRONG kit filename; fix to the candidate's
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8080"
+            - "-c"
+            - "2048"
+            - "--metrics"
+            - "--alias"
+            - "qwen3-0.6b"             # SAME client-facing model name as the base —
+                                       # the client must not care which backend answers
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            # Same working set as the base — it is the same size model (Q8 0.6B),
+            # just different weights. The capacity sum from M8 is unchanged.
+            requests:
+              memory: "1200Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2"
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30      # 30 x 5s = 150s load budget (M8 design)
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+          volumeMounts:
+            - name: model-store
+              mountPath: /model
+      volumes:
+        - name: model-store
+          persistentVolumeClaim:
+            claimName: opsmate-canary
+---
+# The canary's OWN Service. The quality gate hits THIS Service directly to
+# measure the candidate in isolation (labs/m9/canary_gate.py), and the router's
+# canary upstream also points here. Same ClusterIP shape as the base Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsmate-canary
+  labels:
+    app: opsmate-canary
+    role: canary
+spec:
+  selector:
+    app: opsmate-canary
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  type: ClusterIP

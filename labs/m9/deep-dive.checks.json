@@ -1,0 +1,40 @@
+{
+  "checks": [
+    {
+      "id": "kserve-inferenceservice-yaml-shape",
+      "describe": "the Deep Dive's KServe InferenceService read is a well-formed spec walk: the sample manifest carries kind InferenceService, a predictor, and the canaryTrafficPercent field that IS the abstraction the M9 router did by hand (Deep Dive: KServe anatomy). Read from the deep-dive page's embedded YAML captured to a file for the check",
+      "run": "F=labs/m9/kserve-sample.yaml; if [ -s \"$F\" ] && grep -q 'kind: InferenceService' \"$F\" && grep -q 'predictor' \"$F\" && grep -q 'canaryTrafficPercent' \"$F\"; then echo kserve-shape-ok; else echo kserve-shape-missing; fi",
+      "assert": {
+        "contains": "kserve-shape-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "split-clients-weight-math",
+      "describe": "the split_clients weight math the Deep Dive works out is real: a 10% canary bucket over N requests converges toward 0.1*N, and the small-N illusion (0.9^20 ~ 12% chance of zero canary hits) is a computable fact, not a hand-wave (Deep Dive: reading a split). Verified by a tiny arithmetic check",
+      "run": "python3 -c \"p=0.9**20; import sys; print('illusion-real' if 0.10 < p < 0.15 else 'illusion-wrong')\"",
+      "assert": {
+        "contains": "illusion-real"
+      },
+      "weight": 2
+    },
+    {
+      "id": "inferencepool-frontier-shape",
+      "describe": "the llm-d / Gateway API Inference Extension read is anchored to the real object shapes: the frontier sample carries an InferencePool and the KV/prefix-aware routing idea, and the disaggregated prefill/decode pools callback to M1's two phases (Deep Dive: the frontier). Read from the captured frontier sample",
+      "run": "F=labs/m9/inferencepool-sample.yaml; if [ -s \"$F\" ] && grep -q 'InferencePool' \"$F\" && grep -qi 'prefill' \"$F\" && grep -qi 'decode' \"$F\"; then echo frontier-shape-ok; else echo frontier-shape-missing; fi",
+      "assert": {
+        "contains": "frontier-shape-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "decision-tree-branches-walked",
+      "describe": "the decision tree in the Deep Dive walks all four branches with the dependency-cost ladder and the two things the router pattern CANNOT do (per-token / cache-aware routing, prefix affinity) — the reason the frontier exists (Deep Dive: the tree, branch by branch)",
+      "run": "F=labs/opsmate/k8s/DECISION-TREE.md; if grep -qi 'per-token' \"$F\" && grep -qi 'prefix affinity' \"$F\" && grep -qi 'dependency' \"$F\" && grep -q 'InferencePool' \"$F\"; then echo branches-ok; else echo branches-missing; fi",
+      "assert": {
+        "contains": "branches-ok"
+      },
+      "weight": 2
+    }
+  ]
+}
