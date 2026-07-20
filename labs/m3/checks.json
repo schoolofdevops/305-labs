@@ -1,0 +1,67 @@
+{
+  "checks": [
+    {
+      "id": "gguf-model-present-and-valid",
+      "describe": "the Qwen3-0.6B GGUF is downloaded into the stack model dir and begins with the GGUF magic (Step 1). Self-seeds by downloading if absent; asserts the magic bytes, not a fixed size",
+      "run": "F=labs/opsmate/models/gguf/qwen3-0.6b-q8_0.gguf; if [ ! -f \"$F\" ] || [ \"$(head -c 4 \"$F\" 2>/dev/null)\" != \"GGUF\" ]; then mkdir -p labs/opsmate/models/gguf; curl -Ls --fail -o \"$F\" https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf >/dev/null 2>&1; fi; if [ \"$(head -c 4 \"$F\" 2>/dev/null)\" = \"GGUF\" ]; then echo gguf-valid; else echo gguf-invalid; fi",
+      "assert": {
+        "contains": "gguf-valid"
+      },
+      "weight": 2
+    },
+    {
+      "id": "compose-spine-defines-model-service",
+      "describe": "the compose spine exists and defines the single M3 service (model = llama-server on 8080, mem_limit, metrics) — the hand-authored spine that grows to M13 (Step 2)",
+      "run": "F=labs/opsmate/compose.yaml; if grep -q 'ghcr.io/ggml-org/llama.cpp:server' \"$F\" && grep -q '8080:8080' \"$F\" && grep -q 'mem_limit' \"$F\"; then echo spine-ok; else echo spine-missing; fi",
+      "assert": {
+        "contains": "spine-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "stack-up-and-healthy",
+      "describe": "the OpsMate stack is up and the model service reports healthy on /health (Step 2). Self-seeds by bringing the stack up if the engine is not answering",
+      "run": "curl -fsS --max-time 3 http://127.0.0.1:8080/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; curl -s --max-time 5 http://127.0.0.1:8080/health | grep -c 'ok' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo engine-healthy; else echo engine-down; fi'",
+      "assert": {
+        "contains": "engine-healthy"
+      },
+      "weight": 3
+    },
+    {
+      "id": "engine-serves-openai-chat",
+      "describe": "llama-server answers a /v1/chat/completions request behind the OpenAI-compatible contract and returns a usage block (Step 3). Self-seeds the stack if down",
+      "run": "curl -fsS --max-time 3 http://127.0.0.1:8080/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; curl -s --max-time 60 http://127.0.0.1:8080/v1/chat/completions -H 'Content-Type: application/json' -d '{\"model\":\"qwen3-0.6b\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}' | jq -r 'if .usage.total_tokens then \"chat-ok\" else \"chat-fail\" end'",
+      "assert": {
+        "contains": "chat-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "metrics-families-present",
+      "describe": "the engine exposes the llamacpp Prometheus metrics families the course reads — token totals and requests processing/deferred (Step 4). Asserts the families are present, not their values",
+      "run": "curl -fsS --max-time 3 http://127.0.0.1:8080/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; curl -s --max-time 10 http://127.0.0.1:8080/metrics | grep -Ec 'llamacpp:(prompt_tokens_total|tokens_predicted_total|requests_processing|requests_deferred)' | xargs -I{} sh -c 'if [ {} -ge 4 ]; then echo metrics-present; else echo metrics-missing; fi'",
+      "assert": {
+        "contains": "metrics-present"
+      },
+      "weight": 2
+    },
+    {
+      "id": "one-client-two-engines-contract",
+      "describe": "the same client script honours OPENAI_BASE_URL and gets a real answer from llama-server — the engine-swap exhibit (Step 3). Self-seeds the stack if down",
+      "run": "curl -fsS --max-time 3 http://127.0.0.1:8080/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; OPENAI_BASE_URL=http://127.0.0.1:8080/v1 MODEL=qwen3-0.6b uv run --quiet labs/m3/client.py 'say ready' 2>/dev/null | grep -Ec 'engine|answer' | xargs -I{} sh -c 'if [ {} -ge 2 ]; then echo client-ok; else echo client-fail; fi'",
+      "assert": {
+        "contains": "client-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "loadtest-runs-bounded",
+      "describe": "the bounded load test runs against the engine and reports per-level throughput lines (Step 5). Uses a tiny profile to stay laptop-safe; self-seeds the stack if down",
+      "run": "curl -fsS --max-time 3 http://127.0.0.1:8080/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; OPENAI_BASE_URL=http://127.0.0.1:8080/v1 MODEL=qwen3-0.6b REQUESTS=6 LEVELS=2,4 MAX_TOKENS=16 uv run --quiet labs/m3/loadtest.py 2>/dev/null | grep -c 'throughput=' | xargs -I{} sh -c 'if [ {} -ge 2 ]; then echo loadtest-ok; else echo loadtest-fail; fi'",
+      "assert": {
+        "contains": "loadtest-ok"
+      },
+      "weight": 2
+    }
+  ]
+}

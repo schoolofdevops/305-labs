@@ -1,0 +1,103 @@
+{
+  "checks": [
+    {
+      "id": "ollama-reachable",
+      "describe": "Ollama is running on the host and answers /api/version — the model server the whole lab depends on",
+      "run": "curl -s --max-time 5 http://127.0.0.1:11434/api/version | jq -r 'if .version then \"ollama-up\" else \"ollama-down\" end'",
+      "assert": {
+        "contains": "ollama-up"
+      },
+      "weight": 1
+    },
+    {
+      "id": "q4-course-model-pulled",
+      "describe": "the Q4 course model qwen3:0.6b is pulled and listed by Ollama (the M1 model, still present for M2)",
+      "run": "ollama list | grep -c 'qwen3:0.6b ' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo q4-present; else echo q4-missing; fi'",
+      "assert": {
+        "contains": "q4-present"
+      },
+      "weight": 2
+    },
+    {
+      "id": "q8-quant-pullable-and-listed",
+      "describe": "the second quant qwen3:0.6b-q8_0 is available: self-seeds by pulling it if absent, then confirms both quants list together (Step 2)",
+      "run": "ollama list | grep -q 'qwen3:0.6b-q8_0' || ollama pull qwen3:0.6b-q8_0 >/dev/null 2>&1; ollama list | grep -c 'qwen3:0.6b-q8_0' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo q8-present; else echo q8-missing; fi'",
+      "assert": {
+        "contains": "q8-present"
+      },
+      "weight": 3
+    },
+    {
+      "id": "q8-disk-larger-than-q4",
+      "describe": "on disk the Q8 quant is larger than the Q4 quant — the memory-math exhibit (Step 2). Self-seeds the Q8 quant if absent; asserts the shape 'Q8 bigger', never a fixed size",
+      "run": "ollama list | grep -q 'qwen3:0.6b-q8_0' || ollama pull qwen3:0.6b-q8_0 >/dev/null 2>&1; Q4=$(ollama list | grep 'qwen3:0.6b ' | grep -oE '[0-9]+ MB' | grep -oE '[0-9]+' | head -1); Q8=$(ollama list | grep 'qwen3:0.6b-q8_0' | grep -oE '[0-9]+ MB' | grep -oE '[0-9]+' | head -1); if [ -n \"$Q4\" ] && [ -n \"$Q8\" ] && [ \"$Q8\" -gt \"$Q4\" ]; then echo q8-bigger; else echo q8-not-bigger; fi",
+      "assert": {
+        "contains": "q8-bigger"
+      },
+      "weight": 2
+    },
+    {
+      "id": "q4-decode-faster-than-q8",
+      "describe": "the same prompt decodes faster on Q4 than on Q8 — the bandwidth-bound-decode exhibit (Step 3). Self-seeds Q8 if absent; compares eval_rate, asserts the shape 'Q4 faster', never a fixed tok/s",
+      "run": "ollama list | grep -q 'qwen3:0.6b-q8_0' || ollama pull qwen3:0.6b-q8_0 >/dev/null 2>&1; R4=$(curl -s --max-time 90 http://127.0.0.1:11434/api/generate -d '{\"model\":\"qwen3:0.6b\",\"prompt\":\"In about 100 words, explain why the sky is blue. /no_think\",\"stream\":false,\"think\":false}' | jq '.eval_count/(.eval_duration/1e9)'); R8=$(curl -s --max-time 90 http://127.0.0.1:11434/api/generate -d '{\"model\":\"qwen3:0.6b-q8_0\",\"prompt\":\"In about 100 words, explain why the sky is blue. /no_think\",\"stream\":false,\"think\":false}' | jq '.eval_count/(.eval_duration/1e9)'); echo \"$R4 $R8\" | awk '{ if ($1 > $2) print \"q4-faster\"; else print \"q4-not-faster\" }'",
+      "assert": {
+        "contains": "q4-faster"
+      },
+      "weight": 3
+    },
+    {
+      "id": "model-card-shows-params-context-quant",
+      "describe": "ollama show reports the honest parameter count, the model-max context, and the quantization field — the terminal model card (Step 5). Asserts the three fields are present, not their exact values",
+      "run": "ollama show qwen3:0.6b 2>/dev/null | grep -Eic 'parameters|context length|quantization' | xargs -I{} sh -c 'if [ {} -ge 3 ]; then echo card-complete; else echo card-incomplete; fi'",
+      "assert": {
+        "contains": "card-complete"
+      },
+      "weight": 2
+    },
+    {
+      "id": "model-card-license-apache",
+      "describe": "the course model's licence is Apache-2.0 — what permits fine-tune and redistribute later (Step 5, lesson licence beat)",
+      "run": "ollama show --license qwen3:0.6b 2>/dev/null | grep -ic 'Apache' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo license-apache; else echo license-other; fi'",
+      "assert": {
+        "contains": "license-apache"
+      },
+      "weight": 2
+    },
+    {
+      "id": "api-usage-meter-present",
+      "describe": "a non-streaming /v1/chat/completions response carries the usage billing meter with prompt, completion and total token counts (Step 6a)",
+      "run": "curl -s --max-time 60 http://127.0.0.1:11434/v1/chat/completions -H 'Content-Type: application/json' -d '{\"model\":\"qwen3:0.6b\",\"stream\":false,\"messages\":[{\"role\":\"system\",\"content\":\"You are a concise assistant. /no_think\"},{\"role\":\"user\",\"content\":\"Name the largest planet in our solar system.\"}]}' | jq -r 'if (.usage.prompt_tokens != null and .usage.completion_tokens != null and .usage.total_tokens != null) then \"usage-present\" else \"usage-missing\" end'",
+      "assert": {
+        "contains": "usage-present"
+      },
+      "weight": 2
+    },
+    {
+      "id": "api-multi-turn-stateless-answers",
+      "describe": "a multi-turn request that resends the assistant history gets a coherent follow-up answer — the stateless-resend contract works end to end (Step 6b). Asserts a non-empty answer, not specific wording",
+      "run": "curl -s --max-time 60 http://127.0.0.1:11434/v1/chat/completions -H 'Content-Type: application/json' -d '{\"model\":\"qwen3:0.6b\",\"stream\":false,\"messages\":[{\"role\":\"system\",\"content\":\"You are a concise assistant. /no_think\"},{\"role\":\"user\",\"content\":\"Name the largest planet in our solar system.\"},{\"role\":\"assistant\",\"content\":\"The largest planet in our solar system is Jupiter.\"},{\"role\":\"user\",\"content\":\"How many moons does it have, roughly?\"}]}' | jq -r '.choices[0].message.content | if (. | length) > 0 then \"multiturn-ok\" else \"multiturn-empty\" end'",
+      "assert": {
+        "contains": "multiturn-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "api-finish-reason-length-on-cap",
+      "describe": "capping max_tokens low makes the response finish with reason 'length' not 'stop' — the truncation exhibit (Step 6d)",
+      "run": "curl -s --max-time 60 http://127.0.0.1:11434/v1/chat/completions -H 'Content-Type: application/json' -d '{\"model\":\"qwen3:0.6b\",\"stream\":false,\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":\"Explain how a rainbow forms, in detail. /no_think\"}]}' | jq -r '.choices[0].finish_reason'",
+      "assert": {
+        "contains": "length"
+      },
+      "weight": 3
+    },
+    {
+      "id": "teardown-removes-q8-keeps-q4",
+      "describe": "Teardown removes the Q8 quant and leaves the Q4 course model — the reclaim-disk end-state (Step 7). Runs the removal, then asserts Q8 gone and Q4 still present",
+      "run": "ollama rm qwen3:0.6b-q8_0 >/dev/null 2>&1 || true; Q8=$(ollama list | grep -c 'qwen3:0.6b-q8_0'); Q4=$(ollama list | grep -c 'qwen3:0.6b '); if [ \"$Q8\" -eq 0 ] && [ \"$Q4\" -ge 1 ]; then echo teardown-clean; else echo teardown-dirty; fi",
+      "assert": {
+        "contains": "teardown-clean"
+      },
+      "weight": 2
+    }
+  ]
+}

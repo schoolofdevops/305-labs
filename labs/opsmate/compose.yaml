@@ -1,0 +1,153 @@
+# ============================================================================
+# OpsMate — the course spine stack.
+#
+# This file GROWS module by module, service by service, from here (M3) to M13.
+# It starts as a single serving engine and matures into the full OpsMate stack:
+#   M3  model            — the serving engine (llama-server), this file's first service
+#   M4  + app, ui         — RAG over the runbooks (FastAPI backend + Streamlit UI,
+#                           Chroma embedded in the app, embeddings via host Ollama)
+#   M5  + prompts mount   — the app's system prompt becomes a versioned config
+#                           artifact (./prompts, read-only), and evals/ holds the
+#                           golden set + baseline. No new service — M5 grows the
+#                           app's config surface, not the container count.
+#   M6  + switchable GGUF — the served model file becomes an env var (MODEL_GGUF),
+#                           so the SAME model service serves either the base GGUF
+#                           or the M6-tuned one with no code change — the swap the
+#                           fine-tuning measurement rides on. Still one service.
+#   M7  + registry         — a local OCI registry (Zot) so the model stops being a
+#                           loose file and becomes a versioned, addressable artifact
+#                           you push/pull/sign. This is where OpsMate's model gets a
+#                           version number and a home. The Kubernetes phase (M8+)
+#                           pulls FROM this registry — the spine now has a supply line.
+#   ... through M7, then the Compose phase is retired for Kubernetes (M8+), which
+#       pulls its model image from the registry this module stands up.
+#
+# Rule for the whole course: one service is added or grown per module, and the
+# service you already understand never silently changes shape underneath you.
+# Hand-author it — do not generate it — so every line is one you can defend.
+#
+# Apple Silicon note: containers cannot reach the Mac's Metal GPU, so this
+# engine runs CPU inference inside the container. That is deliberate: the
+# containerized CPU path is identical on your Mac, on Linux, and on WSL2, which
+# is what makes the stack portable. (The lesson explains the pattern.)
+# ============================================================================
+
+services:
+  # --- M3: the serving engine ------------------------------------------------
+  # llama-server (llama.cpp) serving the Qwen3-0.6B GGUF over an OpenAI-compatible
+  # API on :8080. Official multi-arch image — the same tag runs on arm64 and amd64.
+  model:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: opsmate-model
+    # M6: the served GGUF file is switchable via MODEL_GGUF. Default is the base
+    # model (M0–M5); set MODEL_GGUF=opsmate-tuned-q8_0.gguf to serve the fine-tuned
+    # model — same service, same OpenAI-compatible API, one env var. The --alias
+    # stays qwen3-0.6b so the app's CHAT_MODEL never has to change on the swap.
+    command: >
+      -m /models/${MODEL_GGUF:-qwen3-0.6b-q8_0.gguf}
+      --host 0.0.0.0
+      --port 8080
+      -c 2048
+      --metrics
+      --alias qwen3-0.6b
+    ports:
+      - "8080:8080"
+    volumes:
+      # Plain model directory, not an HF symlink cache — a symlink farm does not
+      # survive some container file-mount layers (see the deep dive). GGUF lives here.
+      - ./models/gguf:/models:ro
+    mem_limit: 2g
+    healthcheck:
+      # llama-server exposes /health; it reports ok once the model is loaded.
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  # --- M4: the RAG backend ---------------------------------------------------
+  # FastAPI app: /ingest walks the corpus, chunks + embeds, upserts to Chroma;
+  # /retrieve returns nearest chunks + distances; /ask does full RAG. Chroma is
+  # EMBEDDED in this process (PersistentClient on the ./data/chroma volume) — no
+  # vector-DB container on the 8 GB path. Embeddings come from host Ollama
+  # (nomic-embed-text) via host.docker.internal (the M3 Apple-Silicon pattern);
+  # generation goes through the `model` service above, keeping the spine story straight.
+  app:
+    build: ./app
+    container_name: opsmate-app
+    ports:
+      - "8001:8001"
+    environment:
+      # host Ollama for embeddings — the containerized-app-reaches-host pattern.
+      # Default targets Docker Desktop's host.docker.internal. On runtimes where
+      # that name maps to the bridge gateway instead of the host (Rancher Desktop,
+      # Colima, plain Docker Engine), export OLLAMA_URL to the address the
+      # container actually reaches the host on — see the lab Troubleshooting.
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      # generation through the compose model service (service name on the network)
+      MODEL_URL: http://model:8080
+      EMBED_MODEL: nomic-embed-text
+      CHAT_MODEL: qwen3-0.6b
+      CORPUS_DIR: /corpus
+      CHROMA_DIR: /data/chroma
+      # M5: the system prompt is config, not code. Point the app at the mounted
+      # prompt file; swap the file (system.txt ↔ system-v2.txt) + restart to A/B a
+      # prompt with zero code change. Unset this to fall back to the inline default.
+      SYSTEM_PROMPT_FILE: ${SYSTEM_PROMPT_FILE:-/prompts/system.txt}
+    volumes:
+      - ./data/chroma:/data/chroma        # the embedded Chroma store, persisted
+      - ./corpus:/corpus:ro               # the runbook corpus, read-only
+      - ./prompts:/prompts:ro             # M5: versioned system prompts, read-only
+    mem_limit: 1g
+    extra_hosts:
+      # Linux needs this mapping to reach the host; Docker Desktop provides it
+      # automatically, but declaring it makes the stack behave the same everywhere.
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      model:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # --- M4: the chat UI -------------------------------------------------------
+  # Streamlit chat page. Talks only to the app service (/ask, /retrieve) and shows
+  # the retrieved chunks in an expander so you can see what fed each answer.
+  ui:
+    build: ./ui
+    container_name: opsmate-ui
+    ports:
+      - "8501:8501"
+    environment:
+      APP_URL: http://app:8001
+    mem_limit: 512m
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  # --- M7: the model registry ------------------------------------------------
+  # Zot — a lightweight, OCI-native registry (CNCF). It stores model artifacts the
+  # same way a container registry stores images: content-addressed layers under a
+  # manifest, addressable by tag AND by digest. This is where OpsMate's model stops
+  # being a loose GGUF on disk and becomes opsmate/model:1.0.0 — versioned, pullable,
+  # signable. M8's Kubernetes cluster pulls the serving model FROM here.
+  #
+  # The image is arch-specific: Zot publishes per-arch tags, not a multi-arch one, so
+  # pick the tag that matches your host. Default is arm64 (Apple Silicon / ARM Linux);
+  # on an x86_64 host export ZOT_ARCH=amd64 before `make up` (see the lab). Check with
+  # `uname -m`: arm64/aarch64 -> arm64, x86_64 -> amd64.
+  registry:
+    image: ghcr.io/project-zot/zot-linux-${ZOT_ARCH:-arm64}:latest
+    container_name: opsmate-registry
+    ports:
+      # Host 5100 -> container 5000. Everything in the lab talks to localhost:5100;
+      # --plain-http is used because this local registry has no TLS.
+      - "5100:5000"
+    volumes:
+      # Zot reads its config here; the image ships no default config. This one turns
+      # off TLS and points storage at the persisted volume below.
+      - ./registry/config.json:/etc/zot/config.json:ro
+      # Persist the registry across `make` cycles so pushed kits survive a teardown —
+      # M8 pulls from here, so the artifacts must outlive the Compose phase.
+      - ./data/zot:/var/lib/registry
+    mem_limit: 256m
+    restart: unless-stopped

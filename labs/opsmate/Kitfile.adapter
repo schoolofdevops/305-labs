@@ -1,0 +1,33 @@
+# ============================================================================
+# OpsMate adapter ModelKit — the LoRA adapter, packaged on its own.
+#
+# M6 produced a 4.6 MB LoRA adapter (the "removable fittings") alongside the
+# merged model. This Kitfile packages JUST that adapter as its own tiny ModelKit,
+# opsmate/adapter:1.0.0 — separate from the model kit. The point is the size:
+# an adapter is kilobytes-to-megabytes next to a hundreds-of-MB model, so it is
+# trivial to version, sign, and ship independently. One base, many adapters, each
+# a light artifact of its own.
+#
+# Packed from the same context as the model Kitfile (labs/opsmate), so paths are
+# relative to here: the adapter lives under train/adapter/.
+#   kit pack . -f Kitfile.adapter -t localhost:5100/opsmate/adapter:1.0.0
+# ============================================================================
+manifestVersion: 1.0.0
+
+package:
+  name: opsmate-adapter
+  version: 1.0.0
+  description: OpsMate LoRA adapter (r=8, q_proj+v_proj) — the M6 tune's removable fittings
+  authors: ["School of DevOps & AI"]
+
+model:
+  # A LoRA adapter is a "model part" — it is not a standalone model, it is the
+  # thin update that bolts onto the base. Kit packages it the same way; what makes
+  # this kit tiny is that the whole payload is the adapter weights + its config.
+  name: opsmate-lora
+  path: train/adapter/adapter_model.safetensors
+  description: LoRA adapter weights (safetensors) — merge onto Qwen3-0.6B to reproduce the tune
+
+code:
+  - path: train/adapter/adapter_config.json
+    description: the adapter's LoRA config (rank, alpha, target modules) — how to apply it

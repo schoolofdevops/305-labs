@@ -1,0 +1,31 @@
+{
+  "checks": [
+    {
+      "id": "dd-index-present",
+      "describe": "the deep-dive reads the embedded Chroma index the lab built and host Ollama for embeddings. Self-seeds the stack and ingests if the index is empty",
+      "run": "curl -fsS --max-time 3 http://localhost:8001/health >/dev/null 2>&1 || make -C labs/opsmate up >/dev/null 2>&1; [ \"$(curl -s http://localhost:8001/health | jq -r '.chunks // 0')\" -gt 0 ] 2>/dev/null || curl -s -X POST http://localhost:8001/ingest >/dev/null 2>&1; C=$(curl -s --max-time 10 http://localhost:8001/health | jq -r '.chunks // 0'); if [ \"$C\" -gt 0 ] 2>/dev/null; then echo index-ready; else echo index-empty; fi",
+      "assert": {
+        "contains": "index-ready"
+      },
+      "weight": 1
+    },
+    {
+      "id": "dd-rerank-runs-and-reports",
+      "describe": "the hybrid + cross-encoder reranker script runs against the built index and reports a rank-1-correct tally for all three strategies (section 2). Downloads the CPU cross-encoder once",
+      "run": "OLLAMA_URL=http://localhost:11434 CHROMA_DIR=labs/opsmate/data/chroma uv run --quiet labs/m4/rerank.py 2>/dev/null | grep -Ec 'vector|hybrid|rerank' | xargs -I{} sh -c 'if [ {} -ge 3 ]; then echo rerank-ok; else echo rerank-fail; fi'",
+      "assert": {
+        "contains": "rerank-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "dd-rechunk-sweeps-three-caps",
+      "describe": "the chunking trade-off probe rebuilds the corpus at 100/300/800 token caps and reports a top hit + distance per cap (section 3). Uses ephemeral in-memory indexes, never touches the persistent one",
+      "run": "OLLAMA_URL=http://localhost:11434 CORPUS_DIR=labs/opsmate/corpus uv run --quiet labs/m4/rechunk_probe.py 'website throwing 500 errors' 2>/dev/null | grep -Ec '^ +(100|300|800) ' | xargs -I{} sh -c 'if [ {} -ge 3 ]; then echo rechunk-ok; else echo rechunk-fail; fi'",
+      "assert": {
+        "contains": "rechunk-ok"
+      },
+      "weight": 3
+    }
+  ]
+}

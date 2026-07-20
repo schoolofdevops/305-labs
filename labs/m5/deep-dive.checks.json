@@ -1,0 +1,40 @@
+{
+  "checks": [
+    {
+      "id": "dd-judge-model-serves",
+      "describe": "the deep-dive judge-agreement probe needs host Ollama serving qwen3:0.6b (section 2). Self-seeds by pulling it if absent",
+      "run": "ollama list 2>/dev/null | grep -q 'qwen3:0.6b' || ollama pull qwen3:0.6b >/dev/null 2>&1; if ollama list 2>/dev/null | grep -q 'qwen3:0.6b'; then echo judge-ready; else echo judge-missing; fi",
+      "assert": {
+        "contains": "judge-ready"
+      },
+      "weight": 2
+    },
+    {
+      "id": "dd-judge-agreement-runs",
+      "describe": "the judge-agreement probe grades the same borderline answer several times and reports a self-agreement figure (section 2). Needs only host Ollama",
+      "run": "OLLAMA_URL=http://localhost:11434 uv run --quiet labs/m5/judge_agreement.py --runs 4 2>/dev/null | grep -Ec 'self-agreement' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo agreement-reported; else echo agreement-fail; fi'",
+      "assert": {
+        "contains": "agreement-reported"
+      },
+      "weight": 3
+    },
+    {
+      "id": "dd-ci-preview-present",
+      "describe": "the read-along CI gate preview workflow exists and runs BOTH eval layers on a PR (section 4)",
+      "run": "F=labs/opsmate/evals/ci-preview.yml; if [ -s \"$F\" ] && grep -q 'retrieval_check.py' \"$F\" && grep -q 'promptfoo' \"$F\" && grep -q 'pull_request' \"$F\"; then echo ci-preview-ok; else echo ci-preview-missing; fi",
+      "assert": {
+        "contains": "ci-preview-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "dd-golden-sources-traceable",
+      "describe": "the gaming-resistant-set discipline is grounded in the golden set carrying a source per question — the traceability the rotation strategy relies on (section 3)",
+      "run": "F=labs/opsmate/evals/golden.yaml; S=$(grep -c 'source:' \"$F\"); I=$(grep -c 'id:' \"$F\"); if [ \"$S\" -ge \"$I\" ] 2>/dev/null && [ \"$I\" -ge 20 ] 2>/dev/null; then echo sources-traceable; else echo sources-thin; fi",
+      "assert": {
+        "contains": "sources-traceable"
+      },
+      "weight": 2
+    }
+  ]
+}
