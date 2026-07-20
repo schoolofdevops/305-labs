@@ -1,0 +1,49 @@
+# ============================================================================
+# OpsMate ModelKit — the Kitfile that turns loose files into a versioned artifact.
+#
+# A Kitfile is to a ModelKit what a Dockerfile is to an image: a plain manifest
+# that names what goes in the package. `kit pack .` reads this file, bundles the
+# referenced paths into one OCI artifact (each top-level section becomes its own
+# layer), and tags it. Then `kit push` sends it to a registry.
+#
+# As authored, this Kitfile packs the BASE model — OpsMate's shipped 1.0.0, the
+# baseline holder that actually serves. In the lab you pack it as :1.0.0, then
+# change the two model lines below to the TUNED GGUF and pack :1.0.0-candidate —
+# the M6 model that was measured, lost, and is kept as honest history. Same
+# Kitfile, two tags: the registry records what shipped AND what did not.
+#
+# RULE: every path here is RELATIVE to this file's directory (the pack context).
+# Absolute paths are rejected by `kit pack` — the artifact must be portable, and
+# a path that only exists on your machine is not. This directory (labs/opsmate)
+# IS the pack context, so `models/...`, `evals/...`, `prompts` all resolve here.
+# ============================================================================
+manifestVersion: 1.0.0
+
+package:
+  name: opsmate-model
+  version: 1.0.0
+  description: OpsMate SRE assistant — Qwen3-0.6B base, the shipped 1.0.0 baseline holder
+  authors: ["School of DevOps & AI"]
+
+# The model — the largest layer by far (a ~610 MB GGUF). For :1.0.0-candidate,
+# change these two lines to models/gguf/opsmate-tuned-q8_0.gguf and the tuned
+# description (the M6 run: measured, did not beat baseline, recorded honestly).
+model:
+  name: opsmate-base
+  path: models/gguf/qwen3-0.6b-q8_0.gguf
+  description: Qwen3-0.6B, q8_0 GGUF — the base model OpsMate serves in production
+
+# The datasets — the eval set the model was measured on. Kilobytes, its own layer.
+# Packaging the golden set WITH the model makes the audit trail physical: the
+# artifact carries the yardstick it was weighed on, so anyone who pulls it can
+# re-run the measurement instead of trusting a number in a report.
+datasets:
+  - name: golden-set
+    path: evals/golden.yaml
+    description: the held-out golden eval set this model version was measured on
+
+# The code — the versioned system prompts. Kilobytes, its own layer. Selective
+# unpack (kit unpack --filter=code) pulls ONLY this layer, without the 610 MB model.
+code:
+  - path: prompts
+    description: versioned system prompts (the config surface from M5)

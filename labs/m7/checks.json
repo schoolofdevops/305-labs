@@ -1,0 +1,94 @@
+{
+  "checks": [
+    {
+      "id": "registry-service-up",
+      "describe": "the Zot registry service is reachable on localhost:5100 and speaks the OCI catalog API (Step 1). Self-seeds by starting the registry service via compose if it is down",
+      "run": "bash labs/m7/seed.sh >/dev/null 2>&1; if curl -fsS http://localhost:5100/v2/_catalog | grep -q 'repositories'; then echo registry-up; else echo registry-down; fi",
+      "assert": {
+        "contains": "registry-up"
+      },
+      "weight": 2
+    },
+    {
+      "id": "kitfile-relative-paths",
+      "describe": "the model Kitfile uses RELATIVE paths (absolute paths are rejected by kit) and packs three layers — model, datasets, code (Step 2)",
+      "run": "F=labs/opsmate/Kitfile; if [ -s \"$F\" ] && grep -q 'path: models/gguf/' \"$F\" && grep -q 'path: evals/golden.yaml' \"$F\" && grep -q 'path: prompts' \"$F\" && ! grep -qE 'path: /' \"$F\"; then echo kitfile-relative; else echo kitfile-bad; fi",
+      "assert": {
+        "contains": "kitfile-relative"
+      },
+      "weight": 2
+    },
+    {
+      "id": "both-model-tags-pushed",
+      "describe": "both tags are in the registry — the shipped base 1.0.0 AND the recorded M6 candidate 1.0.0-candidate (Step 3, the two-tags story). Self-seeds the packs/pushes",
+      "run": "bash labs/m7/seed.sh >/dev/null 2>&1; T=$(curl -fsS http://localhost:5100/v2/opsmate/model/tags/list 2>/dev/null); if echo \"$T\" | grep -q '\"1.0.0\"' && echo \"$T\" | grep -q '1.0.0-candidate'; then echo two-tags; else echo tags-missing; fi",
+      "assert": {
+        "contains": "two-tags"
+      },
+      "weight": 3
+    },
+    {
+      "id": "model-kit-is-large",
+      "describe": "the model kit's model layer is the heavy crate — hundreds of MB (the 610 MB GGUF), read from the real manifest (Step 3, layer sizes)",
+      "run": "bash labs/m7/seed.sh >/dev/null 2>&1; SZ=$(curl -fsS -H 'Accept: application/vnd.oci.image.manifest.v1+json' http://localhost:5100/v2/opsmate/model/manifests/1.0.0 | jq '[.layers[].size] | max' 2>/dev/null); if [ -n \"$SZ\" ] && [ \"$SZ\" -gt 100000000 ] 2>/dev/null; then echo model-layer-large; else echo model-layer-small; fi",
+      "assert": {
+        "contains": "model-layer-large"
+      },
+      "weight": 2
+    },
+    {
+      "id": "adapter-kit-is-tiny",
+      "describe": "the adapter kit exists and is tiny next to the model kit — the adapters-travel-light point (Step 4). Skips gracefully if M6 artifacts are absent",
+      "run": "bash labs/m7/seed.sh >/dev/null 2>&1; if ! curl -fsS http://localhost:5100/v2/opsmate/adapter/tags/list 2>/dev/null | grep -q '1.0.0'; then echo adapter-skipped-no-m6; else SZ=$(curl -fsS -H 'Accept: application/vnd.oci.image.manifest.v1+json' http://localhost:5100/v2/opsmate/adapter/manifests/1.0.0 | jq '[.layers[].size] | add' 2>/dev/null); if [ -n \"$SZ\" ] && [ \"$SZ\" -lt 50000000 ] 2>/dev/null; then echo adapter-tiny; else echo adapter-odd; fi; fi",
+      "assert": {
+        "matches": "adapter-tiny|adapter-skipped-no-m6"
+      },
+      "weight": 2
+    },
+    {
+      "id": "selective-unpack-code-only",
+      "describe": "selective unpack (--filter=code) pulls ONLY the prompts layer, not the 610 MB model — the take-one-crate lesson (Step 5)",
+      "run": "bash labs/m7/seed.sh >/dev/null 2>&1; D=$(mktemp -d); kit unpack localhost:5100/opsmate/model:1.0.0 --filter=code -d \"$D\" --plain-http >/dev/null 2>&1; HAS_PROMPTS=$(find \"$D\" -name 'system.txt' | head -1); HAS_GGUF=$(find \"$D\" -name '*.gguf' | head -1); rm -rf \"$D\"; if [ -n \"$HAS_PROMPTS\" ] && [ -z \"$HAS_GGUF\" ]; then echo code-only; else echo unpack-wrong; fi",
+      "assert": {
+        "contains": "code-only"
+      },
+      "weight": 3
+    },
+    {
+      "id": "base-signature-verifies",
+      "describe": "the base 1.0.0 is signed and cosign verifies it by digest — the wax seal, cleared to deploy (Step 6). Self-seeds keys + sign",
+      "run": "bash labs/m7/seed.sh >/dev/null 2>&1; D=$(curl -sI -H 'Accept: application/vnd.oci.image.manifest.v1+json' http://localhost:5100/v2/opsmate/model/manifests/1.0.0 | awk 'tolower($1)==\"docker-content-digest:\"{print $2}' | tr -d '\\r'); if cosign verify --key labs/opsmate/signing/cosign.pub --allow-insecure-registry --insecure-ignore-tlog \"localhost:5100/opsmate/model@$D\" >/dev/null 2>&1; then echo base-signed; else echo base-unsigned; fi",
+      "assert": {
+        "contains": "base-signed"
+      },
+      "weight": 3
+    },
+    {
+      "id": "candidate-is-unsigned",
+      "describe": "the candidate 1.0.0-candidate is deliberately UNSIGNED — verifying it FAILS, which is the gate story (Step 6). Skips if M6 candidate is absent",
+      "run": "bash labs/m7/seed.sh >/dev/null 2>&1; if ! curl -fsS http://localhost:5100/v2/opsmate/model/tags/list 2>/dev/null | grep -q '1.0.0-candidate'; then echo candidate-skipped-no-m6; else D=$(curl -sI -H 'Accept: application/vnd.oci.image.manifest.v1+json' http://localhost:5100/v2/opsmate/model/manifests/1.0.0-candidate | awk 'tolower($1)==\"docker-content-digest:\"{print $2}' | tr -d '\\r'); if cosign verify --key labs/opsmate/signing/cosign.pub --allow-insecure-registry --insecure-ignore-tlog \"localhost:5100/opsmate/model@$D\" >/dev/null 2>&1; then echo candidate-signed-unexpected; else echo candidate-unsigned; fi; fi",
+      "assert": {
+        "matches": "candidate-unsigned|candidate-skipped-no-m6"
+      },
+      "weight": 2
+    },
+    {
+      "id": "preflight-has-signature-gate",
+      "describe": "the preflight has the optional VERIFY_SIGNATURE gate that cosign-verifies before serving — the verify-before-deploy hook (Step 7)",
+      "run": "F=labs/opsmate/preflight.sh; if grep -q 'VERIFY_SIGNATURE' \"$F\" && grep -q 'cosign verify' \"$F\"; then echo gate-present; else echo gate-missing; fi",
+      "assert": {
+        "contains": "gate-present"
+      },
+      "weight": 2
+    },
+    {
+      "id": "compose-has-registry-service",
+      "describe": "the compose spine grew a registry service (Zot) — arch-parameterised image, port 5100, persisted volume (Step 1)",
+      "run": "F=labs/opsmate/compose.yaml; if grep -q 'registry:' \"$F\" && grep -q 'zot-linux' \"$F\" && grep -q '5100:5000' \"$F\"; then echo registry-service; else echo registry-service-missing; fi",
+      "assert": {
+        "contains": "registry-service"
+      },
+      "weight": 1
+    }
+  ]
+}

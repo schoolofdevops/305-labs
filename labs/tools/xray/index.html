@@ -163,6 +163,31 @@
   .chunkCard.fed .fedTag{display:inline}
   #ragEmpty{color:var(--faint);font-size:.84rem;font-family:var(--mono)}
 
+  /* ---------- artifacts lens (M7) ---------- */
+  body.lens-artifacts #main,body.lens-artifacts #bar,body.lens-artifacts #engMain,body.lens-artifacts #ragMain,body.lens-artifacts #evMain,body.lens-artifacts #trMain{display:none}
+  #arMain{display:none;flex:1 1 auto;min-height:0;grid-template-columns:clamp(230px,20rem,320px) 1fr;gap:6px}
+  body.lens-artifacts #arMain{display:grid}
+  #arLeft{display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto;scrollbar-width:thin}
+  #arOffline{display:none;border:1px dashed rgba(245,185,66,.5);border-radius:9px;padding:10px 12px;
+    color:var(--warn);font-size:.9rem;line-height:1.5;background:rgba(245,185,66,.06)}
+  #arOffline.show{display:block}
+  #arOffline code{font-family:var(--mono);font-size:.84rem;color:var(--txt);background:rgba(255,255,255,.06);padding:0 4px;border-radius:4px}
+  .tagRow{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.8rem;
+    border:1px solid var(--line);border-radius:7px;padding:4px 8px;background:var(--panel2);cursor:pointer}
+  .tagRow:hover{border-color:var(--accent)}
+  .tagRow.sel{border-color:var(--accent);background:rgba(76,201,240,.08)}
+  .tagRow .repo{color:var(--dim)} .tagRow .tag{color:var(--txt);font-weight:600}
+  .tagRow .signed{margin-left:auto;font-size:.68rem;font-weight:700;letter-spacing:.4px;padding:1px 6px;border-radius:6px}
+  .tagRow .signed.yes{background:rgba(61,220,151,.14);color:var(--ok);border:1px solid rgba(61,220,151,.4)}
+  .tagRow .signed.no{background:rgba(132,148,179,.12);color:var(--faint);border:1px solid var(--line)}
+  #arDetail{display:flex;flex-direction:column;min-height:0}
+  #arLayers{flex:1;overflow-y:auto;scrollbar-width:thin;font-family:var(--mono);font-size:.8rem}
+  .layerRow{display:flex;gap:10px;align-items:center;padding:4px 6px;border-bottom:1px dashed var(--line2)}
+  .layerRow .lt{flex:1;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .layerRow .lsize{color:var(--txt);font-weight:600;white-space:nowrap}
+  .layerRow .lbar{height:.6rem;border-radius:4px;background:linear-gradient(90deg,#7b6cf6,#4cc9f0);min-width:2px}
+  #arDigest{font-family:var(--mono);font-size:.72rem;color:var(--faint);word-break:break-all;padding:4px 2px}
+
   /* ---------- train lens (M6) ---------- */
   body.lens-train #main,body.lens-train #bar,body.lens-train #engMain,body.lens-train #ragMain,body.lens-train #evMain{display:none}
   #trMain{display:none;flex:1 1 auto;min-height:0;grid-template-columns:clamp(250px,22rem,360px) 1fr;gap:6px}
@@ -235,7 +260,7 @@
       <button class="tab" data-lens="rag">RAG</button>
       <button class="tab" data-lens="evals">Evals</button>
       <button class="tab" data-lens="train">Train</button>
-      <button class="tab stub" title="lands with M7">Artifacts<small>M7</small></button>
+      <button class="tab" data-lens="artifacts">Artifacts</button>
       <button class="tab stub" title="lands with M8">K8s<small>M8</small></button>
       <button class="tab stub" title="lands with M10">Traces<small>M10</small></button>
       <button class="tab stub" title="lands with M12">Spend<small>M12</small></button>
@@ -339,6 +364,26 @@
         <h2>Retrieved chunks — live from your index</h2>
         <div id="ragChunks"><span id="ragEmpty">no retrieval yet</span></div>
       </div>
+    </div>
+  </div>
+
+  <div id="arMain">
+    <div id="arLeft">
+      <div id="arOffline">
+        The local registry is not reachable. Bring the stack up
+        (<code>make -C labs/opsmate up</code>) and push a kit (M7 lab) —
+        the Artifacts lens reads your real Zot registry. Set <code>REGISTRY_URL</code>
+        if it listens elsewhere.
+      </div>
+      <div class="panel">
+        <h2>Repositories · tags <span class="rateChip" id="arCount"></span></h2>
+        <div id="arTags" style="display:flex;flex-direction:column;gap:4px"></div>
+      </div>
+    </div>
+    <div class="panel" id="arDetail">
+      <h2>Layers — <span id="arSel" style="text-transform:none;letter-spacing:0">select a tag</span></h2>
+      <div id="arLayers"></div>
+      <div id="arDigest"></div>
     </div>
   </div>
 
@@ -627,7 +672,7 @@
 
   /* ---------- presets: the two contrasting experiments from the lab ---------- */
   /* ---------- lens switching (M3+) ---------- */
-  const LENS_NAMES = { tokens: 'Tokens lens', engine: 'Engine lens', rag: 'RAG lens', evals: 'Evals lens', train: 'Train lens' };
+  const LENS_NAMES = { tokens: 'Tokens lens', engine: 'Engine lens', rag: 'RAG lens', evals: 'Evals lens', train: 'Train lens', artifacts: 'Artifacts lens' };
   document.querySelectorAll('#tabs .tab[data-lens]').forEach(t => t.addEventListener('click', () => {
     document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
@@ -636,7 +681,87 @@
     $("lensName").textContent = LENS_NAMES[lens] || lens;
     if (lens === 'evals') loadEvals();
     if (lens === 'train') trPoll();
+    if (lens === 'artifacts') loadArtifacts();
   }));
+
+  /* ---------- Artifacts lens (M7): browse the real Zot registry ---------- */
+  const fmtBytes = n => n >= 1e9 ? (n/1e9).toFixed(2)+" GB" : n >= 1e6 ? (n/1e6).toFixed(1)+" MB" : n >= 1e3 ? (n/1e3).toFixed(1)+" kB" : n+" B";
+  async function regJson(path, accept) {
+    const r = await fetch("/registry" + path, accept ? { headers: { "Accept": accept } } : undefined);
+    const d = await r.json();
+    if (d.error || d.errors) throw new Error(JSON.stringify(d.error || d.errors));
+    return d;
+  }
+  async function loadArtifacts() {
+    const box = $("arTags");
+    try {
+      const cat = await regJson("/v2/_catalog");
+      $("arOffline").classList.remove("show");
+      box.innerHTML = "";
+      let total = 0;
+      for (const repo of cat.repositories || []) {
+        const tags = (await regJson(`/v2/${repo}/tags/list`)).tags || [];
+        for (const tag of tags) {
+          if (/\.sig$/.test(tag) || /^sha256-/.test(tag)) continue; // cosign attachment tags
+          total++;
+          // per-tag signature check. Modern cosign (v3, OCI-1.1 registries like
+          // Zot) attaches signatures via the REFERRERS API as sigstore bundles;
+          // older cosign uses a sha256-<digest>.sig tag. Check both.
+          let signed = false;
+          try {
+            const mr = await fetch(`/registry/v2/${repo}/manifests/${tag}`,
+              { headers: { "Accept": "application/vnd.oci.image.manifest.v1+json" } });
+            const dig = mr.headers.get("Docker-Content-Digest") || "";
+            if (dig) {
+              const refs = await regJson(`/v2/${repo}/referrers/${dig}`);
+              signed = (refs.manifests || []).some(m =>
+                /sigstore|cosign/.test(m.artifactType || ""));
+              if (!signed) signed = tags.includes(`sha256-${dig.replace("sha256:", "")}.sig`);
+            }
+          } catch (e) {}
+          const row = document.createElement("div");
+          row.className = "tagRow";
+          row.innerHTML = `<span class="repo"></span><span class="tag"></span><span class="signed ${signed ? "yes" : "no"}">${signed ? "SIGNED ✓" : "unsigned"}</span>`;
+          row.querySelector(".repo").textContent = repo + ":";
+          row.querySelector(".tag").textContent = tag;
+          row.addEventListener("click", () => showManifest(repo, tag, row, signed));
+          box.appendChild(row);
+        }
+      }
+      $("arCount").textContent = total ? `(${total})` : "";
+      if (!total) box.innerHTML = '<span style="color:var(--faint);font-family:var(--mono);font-size:.82rem">registry is empty — push a kit (M7 Step 3)</span>';
+    } catch (e) {
+      $("arOffline").classList.add("show");
+      box.innerHTML = "";
+      $("arCount").textContent = "";
+    }
+  }
+  async function showManifest(repo, tag, row, signed) {
+    document.querySelectorAll(".tagRow").forEach(r => r.classList.remove("sel"));
+    row.classList.add("sel");
+    $("arSel").textContent = `${repo}:${tag}` + (signed ? "  ·  signed ✓" : "");
+    try {
+      const m = await regJson(`/v2/${repo}/manifests/${tag}`,
+        "application/vnd.oci.image.manifest.v1+json");
+      const layers = m.layers || [];
+      const maxSize = Math.max(1, ...layers.map(l => l.size || 0));
+      const box = $("arLayers");
+      box.innerHTML = "";
+      for (const l of layers) {
+        const short = (l.mediaType || "").replace("application/vnd.", "").slice(0, 52);
+        const div = document.createElement("div");
+        div.className = "layerRow";
+        div.innerHTML = `<span class="lt"></span><span class="lbar" style="width:${Math.max(2, (l.size || 0) / maxSize * 160)}px"></span><span class="lsize"></span>`;
+        div.querySelector(".lt").textContent = short;
+        div.querySelector(".lsize").textContent = fmtBytes(l.size || 0);
+        box.appendChild(div);
+      }
+      $("arDigest").textContent = "config digest: " + ((m.config || {}).digest || "—");
+      logEv("artifacts", `${repo}:${tag} — ${layers.length} layers`);
+    } catch (e) {
+      $("arLayers").innerHTML = '<span style="color:var(--faint)">manifest fetch failed</span>';
+    }
+  }
 
   /* ---------- Train lens (M6): tail progress.jsonl ---------- */
   function drawTrainChart(points) {  // [[step, loss], ...]

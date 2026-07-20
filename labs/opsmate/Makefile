@@ -16,18 +16,40 @@ COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compos
 HEALTH_URL ?= http://127.0.0.1:8080/health
 WAIT_SECONDS ?= 90
 
-.PHONY: up down preflight
+.PHONY: up down preflight registry-catalog
 
 preflight:
 	@bash preflight.sh
 
 up: preflight
 	@echo "==> Starting the OpsMate stack ..."
-	@# Ensure the Chroma bind-mount source exists before compose starts. On a
-	@# fresh clone this directory is absent; some Docker setups fail to create
-	@# and chown a missing bind source, so create it ourselves (M4+ uses it).
-	@mkdir -p ./data/chroma
+	@# Ensure the bind-mount sources exist before compose starts. On a fresh clone
+	@# these directories are absent; some Docker setups fail to create and chown a
+	@# missing bind source, so create them ourselves (Chroma from M4, Zot from M7).
+	@mkdir -p ./data/chroma ./data/zot
 	@$(COMPOSE) up -d --build
+	@echo "==> Waiting for the model service to report healthy (up to $(WAIT_SECONDS)s) ..."
+	@i=0; \
+	while [ $$i -lt $(WAIT_SECONDS) ]; do \
+	  if curl -fsS --max-time 2 $(HEALTH_URL) >/dev/null 2>&1; then \
+	    echo "    Model service is healthy at $(HEALTH_URL)."; \
+	    echo "    Stack is up. Try:  curl -s $(HEALTH_URL)"; \
+	    exit 0; \
+	  fi; \
+	  sleep 2; i=$$((i+2)); \
+	done; \
+	echo "    Model service did not become healthy in $(WAIT_SECONDS)s."; \
+	echo "    Check logs:  $(COMPOSE) logs model"; \
+	exit 1
+
+# M7: a one-line look at what the local registry holds — repositories and, for the
+# model repo, its tags. Handy after a push and as the "is the registry up?" probe.
+registry-catalog:
+	@curl -fsS http://localhost:5100/v2/_catalog || \
+	  { echo "registry not reachable at localhost:5100 — is the stack up? (make up)"; exit 1; }
+	@echo
+	@curl -fsS http://localhost:5100/v2/opsmate/model/tags/list 2>/dev/null || true
+	@echo
 	@echo "==> Waiting for the model service to report healthy (up to $(WAIT_SECONDS)s) ..."
 	@i=0; \
 	while [ $$i -lt $(WAIT_SECONDS) ]; do \

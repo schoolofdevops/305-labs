@@ -72,4 +72,45 @@ else
   echo "    ✓ ${FREE} MB free (need ~${REQUIRED_MB} MB)."
 fi
 
+# --- optional signature verification (M7) ----------------------------------
+# When VERIFY_SIGNATURE=1, refuse to start unless the model artifact you are about
+# to serve has a valid Cosign signature in the local registry. This is the
+# verify-before-deploy gate in miniature — the same check M8's Kubernetes admission
+# controller will enforce on the cluster. Unset (the default) it is skipped
+# silently, so earlier modules and CI are unaffected. Verification is by DIGEST:
+# a signature is bound to exact bytes, so we resolve the tag to its digest first.
+if [ "${VERIFY_SIGNATURE:-0}" = "1" ]; then
+  VERIFY_TAG="${VERIFY_TAG:-1.0.0}"
+  VERIFY_REPO="${VERIFY_REPO:-localhost:5100/opsmate/model}"
+  PUB="$(cd "$(dirname "$0")" && pwd)/signing/cosign.pub"
+  echo "==> Signature gate: verifying ${VERIFY_REPO}:${VERIFY_TAG} before serving"
+  if [ ! -f "$PUB" ]; then
+    echo "    ✗ No public key at $PUB — generate keys first (Lab Step 6):"
+    echo "      cd signing && cosign generate-key-pair"
+    exit 1
+  fi
+  # Resolve the tag to its manifest digest (a signature is bound to bytes, not tags).
+  # VERIFY_REPO is host/repo (e.g. localhost:5100/opsmate/model); split on the first /.
+  REG_HOST="${VERIFY_REPO%%/*}"
+  REG_PATH="${VERIFY_REPO#*/}"
+  DIGEST="$(curl -sI -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+    "http://${REG_HOST}/v2/${REG_PATH}/manifests/${VERIFY_TAG}" \
+    | awk 'tolower($1)=="docker-content-digest:"{print $2}' | tr -d '\r')"
+  if [ -z "$DIGEST" ]; then
+    echo "    ✗ Could not resolve ${VERIFY_REPO}:${VERIFY_TAG} to a digest."
+    echo "      Is the registry up (make up) and the kit pushed (Lab Step 3)?"
+    exit 1
+  fi
+  if cosign verify --key "$PUB" --allow-insecure-registry --insecure-ignore-tlog \
+       "${VERIFY_REPO}@${DIGEST}" >/dev/null 2>&1; then
+    echo "    ✓ Signature valid for ${VERIFY_REPO}@${DIGEST%%:*}:… — cleared to serve."
+  else
+    echo "    ✗ NO valid signature for ${VERIFY_REPO}:${VERIFY_TAG} (digest ${DIGEST})."
+    echo "      Refusing to serve an unsigned/unverified model. This is the gate:"
+    echo "      an unsigned candidate (e.g. 1.0.0-candidate) fails here by design."
+    echo "      Sign it (Lab Step 6) or serve the signed tag (VERIFY_TAG=1.0.0)."
+    exit 1
+  fi
+fi
+
 echo "    Preflight passed."

@@ -14,7 +14,13 @@
 #                           so the SAME model service serves either the base GGUF
 #                           or the M6-tuned one with no code change — the swap the
 #                           fine-tuning measurement rides on. Still one service.
-#   ... through M7, then the Compose phase is retired for Kubernetes (M8+).
+#   M7  + registry         — a local OCI registry (Zot) so the model stops being a
+#                           loose file and becomes a versioned, addressable artifact
+#                           you push/pull/sign. This is where OpsMate's model gets a
+#                           version number and a home. The Kubernetes phase (M8+)
+#                           pulls FROM this registry — the spine now has a supply line.
+#   ... through M7, then the Compose phase is retired for Kubernetes (M8+), which
+#       pulls its model image from the registry this module stands up.
 #
 # Rule for the whole course: one service is added or grown per module, and the
 # service you already understand never silently changes shape underneath you.
@@ -116,4 +122,32 @@ services:
     mem_limit: 512m
     depends_on:
       - app
+    restart: unless-stopped
+
+  # --- M7: the model registry ------------------------------------------------
+  # Zot — a lightweight, OCI-native registry (CNCF). It stores model artifacts the
+  # same way a container registry stores images: content-addressed layers under a
+  # manifest, addressable by tag AND by digest. This is where OpsMate's model stops
+  # being a loose GGUF on disk and becomes opsmate/model:1.0.0 — versioned, pullable,
+  # signable. M8's Kubernetes cluster pulls the serving model FROM here.
+  #
+  # The image is arch-specific: Zot publishes per-arch tags, not a multi-arch one, so
+  # pick the tag that matches your host. Default is arm64 (Apple Silicon / ARM Linux);
+  # on an x86_64 host export ZOT_ARCH=amd64 before `make up` (see the lab). Check with
+  # `uname -m`: arm64/aarch64 -> arm64, x86_64 -> amd64.
+  registry:
+    image: ghcr.io/project-zot/zot-linux-${ZOT_ARCH:-arm64}:latest
+    container_name: opsmate-registry
+    ports:
+      # Host 5100 -> container 5000. Everything in the lab talks to localhost:5100;
+      # --plain-http is used because this local registry has no TLS.
+      - "5100:5000"
+    volumes:
+      # Zot reads its config here; the image ships no default config. This one turns
+      # off TLS and points storage at the persisted volume below.
+      - ./registry/config.json:/etc/zot/config.json:ro
+      # Persist the registry across `make` cycles so pushed kits survive a teardown —
+      # M8 pulls from here, so the artifacts must outlive the Compose phase.
+      - ./data/zot:/var/lib/registry
+    mem_limit: 256m
     restart: unless-stopped

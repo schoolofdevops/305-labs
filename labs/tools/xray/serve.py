@@ -17,6 +17,7 @@ PORT = int(os.environ.get("PORT", "8010"))
 OLLAMA = os.environ.get("OLLAMA_HOST_URL", "http://127.0.0.1:11434").rstrip("/")
 LLAMACPP = os.environ.get("LLAMACPP_URL", "http://127.0.0.1:8080").rstrip("/")
 APP = os.environ.get("APP_URL", "http://127.0.0.1:8001").rstrip("/")
+REGISTRY = os.environ.get("REGISTRY_URL", "http://127.0.0.1:5100").rstrip("/")
 EVALS_DIR = os.environ.get(
     "EVALS_DIR",
     os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -37,12 +38,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args):  # keep the terminal quiet; the page shows state
         pass
 
-    PROXIES = (("/ollama/", "OLLAMA"), ("/llamacpp/", "LLAMACPP"), ("/app/", "APP"))
+    PROXIES = (("/ollama/", "OLLAMA"), ("/llamacpp/", "LLAMACPP"), ("/app/", "APP"),
+               ("/registry/", "REGISTRY"))
 
     def _route(self):
         for prefix, name in self.PROXIES:
             if self.path.startswith(prefix):
-                return prefix, {"OLLAMA": OLLAMA, "LLAMACPP": LLAMACPP, "APP": APP}[name]
+                return prefix, {"OLLAMA": OLLAMA, "LLAMACPP": LLAMACPP, "APP": APP,
+                                "REGISTRY": REGISTRY}[name]
         return None, None
 
     def do_GET(self):
@@ -100,6 +103,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     "Content-Type",
                     resp.headers.get("Content-Type", "application/json"),
                 )
+                if resp.headers.get("Docker-Content-Digest"):
+                    self.send_header("Docker-Content-Digest",
+                                     resp.headers["Docker-Content-Digest"])
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 # Ollama streams NDJSON — forward line by line so the page

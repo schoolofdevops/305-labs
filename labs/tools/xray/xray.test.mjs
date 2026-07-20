@@ -160,9 +160,9 @@ async function main() {
   ok('loads: no console errors', consoleErrors.length === 0, consoleErrors.join(' | '));
   ok('loads: no page exceptions', pageErrors.length === 0, pageErrors.join(' | '));
   ok('loads: zero non-same-origin requests', externalReqs.length === 0, externalReqs.join(' | '));
-  ok('lens tabs: 1 active + 5 live lenses + 4 stubs', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
-      && await ev('document.querySelectorAll("#tabs .tab[data-lens]").length') === 5
-      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 4);
+  ok('lens tabs: 1 active + 6 live lenses + 3 stubs', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
+      && await ev('document.querySelectorAll("#tabs .tab[data-lens]").length') === 6
+      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 3);
 
   // ---------- 2. real connection state ----------
   await waitFor('document.getElementById("connInd").className === "connected"', 12000, 'conn: indicator connected');
@@ -272,6 +272,23 @@ async function main() {
   ok('train: sec/step gauge numeric', /^\d+\.\d+ s$/.test(await gauge('trRate')), await gauge('trRate'));
   ok('train: done banner with summary', (await ev('document.getElementById("trDone").classList.contains("show")')) === true);
   ok('train: offline banner hidden', !(await ev('document.getElementById("trOffline").classList.contains("show")')));
+
+  // ---------- 10. Artifacts lens (M7) — browses the real Zot registry ----------
+  await ev('document.querySelector("#tabs .tab[data-lens=artifacts]").click()');
+  ok('artifacts: lens switches (panel visible)',
+    (await ev('document.body.classList.contains("lens-artifacts")')) === true
+    && (await ev('getComputedStyle(document.getElementById("arMain")).display')) === 'grid');
+  await waitFor('document.querySelectorAll("#arTags .tagRow").length >= 3', 15000, 'artifacts: tag rows load');
+  ok('artifacts: shows model 1.0.0, candidate, and adapter',
+    (await ev('[...document.querySelectorAll("#arTags .tagRow")].map(r => r.textContent).join("|")')).includes('1.0.0-candidate'));
+  ok('artifacts: signed badge on base, unsigned on candidate',
+    (await ev('[...document.querySelectorAll("#arTags .tagRow")].some(r => r.textContent.includes("1.0.0") && !r.textContent.includes("candidate") && r.querySelector(".signed.yes"))')) === true
+    && (await ev('[...document.querySelectorAll("#arTags .tagRow")].some(r => r.textContent.includes("candidate") && r.querySelector(".signed.no"))')) === true);
+  await ev('[...document.querySelectorAll("#arTags .tagRow")].find(r => r.textContent.includes("candidate")).click()');
+  await waitFor('document.querySelectorAll("#arLayers .layerRow").length >= 2', 10000, 'artifacts: layer table renders');
+  ok('artifacts: layer sizes visible incl. the model layer', /MB|GB/.test(await ev('document.getElementById("arLayers").textContent')));
+  ok('artifacts: config digest shown', /sha256:/.test(await gauge('arDigest')));
+  ok('artifacts: offline banner hidden', !(await ev('document.getElementById("arOffline").classList.contains("show")')));
 
   // switch back for the screenshot
   await ev('document.querySelector("#tabs .tab[data-lens=tokens]").click()');

@@ -10,7 +10,7 @@ no fake numbers — and grows one lens per module.
 | **RAG** | M4 | Ask your real corpus: Retrieve shows ranked chunks with sources + distances live from your index; Ask runs the full pipeline and marks which chunks fed the answer |
 | **Evals** | M5 | The course scoreboard: retrieval tripwire (N/24), the three generation arms (no-RAG / v1 / v2) as bars, the RAG-vs-no-RAG gap, honesty-refusal count, and the per-question pass/fail grid — read live from the eval JSONs your runs write |
 | **Train** | M6 | Tails your real `train/progress.jsonl` live: loss curve for the whole run, step/lr/elapsed/sec-per-step gauges, first-vs-latest loss, and the run-complete summary banner |
-| Artifacts | M7 | _lands with M7_ |
+| **Artifacts** | M7 | Browses your real Zot registry: repos and tags with per-tag SIGNED/unsigned badges (OCI referrers API, sigstore-aware), and per-tag layer tables showing the 610 MB model layer against the KB-sized prompt/dataset layers |
 | K8s | M8 | _lands with M8_ |
 | Traces | M10 | _lands with M10_ |
 | Spend | M12 | _lands with M12_ |

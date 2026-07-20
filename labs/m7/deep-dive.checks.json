@@ -1,0 +1,49 @@
+{
+  "checks": [
+    {
+      "id": "dd-manifest-shows-kitops-media-types",
+      "describe": "the real manifest for 1.0.0 exposes the KitOps model/code/dataset media types — the typed-layers point (section 1). Self-seeds the registry + kits",
+      "run": "bash labs/m7/seed.sh >/dev/null 2>&1; M=$(curl -fsS -H 'Accept: application/vnd.oci.image.manifest.v1+json' http://localhost:5100/v2/opsmate/model/manifests/1.0.0); if echo \"$M\" | grep -q 'kitops.modelkit.model' && echo \"$M\" | grep -q 'kitops.modelkit.code'; then echo media-types-ok; else echo media-types-missing; fi",
+      "assert": {
+        "contains": "media-types-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "dd-manifest-layer-size-gap",
+      "describe": "the manifest shows the four-orders-of-magnitude gap — the model layer is >100 MB while the metadata layers are KB — which is why selective pull matters (section 1)",
+      "run": "bash labs/m7/seed.sh >/dev/null 2>&1; SIZES=$(curl -fsS -H 'Accept: application/vnd.oci.image.manifest.v1+json' http://localhost:5100/v2/opsmate/model/manifests/1.0.0 | jq '.layers | {max: (map(.size)|max), min: (map(.size)|min)}' 2>/dev/null); MAX=$(echo \"$SIZES\" | jq '.max' 2>/dev/null); MIN=$(echo \"$SIZES\" | jq '.min' 2>/dev/null); if [ -n \"$MAX\" ] && [ -n \"$MIN\" ] && [ \"$MAX\" -gt 100000000 ] 2>/dev/null && [ \"$MIN\" -lt 1000000 ] 2>/dev/null; then echo size-gap-ok; else echo size-gap-odd; fi",
+      "assert": {
+        "contains": "size-gap-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "dd-serving-image-scan-runs",
+      "describe": "Trivy scans the serving image and reports a HIGH/CRITICAL count — the severity-gated supply-chain scan (section 3). Asserts the scan RAN, not a specific count (CVE counts drift)",
+      "run": "if ! command -v trivy >/dev/null 2>&1; then echo trivy-absent; else trivy image --quiet --severity HIGH,CRITICAL --scanners vuln ghcr.io/ggml-org/llama.cpp:server 2>/dev/null | grep -qiE 'Report Summary|Vulnerabilities|llama' && echo scan-ran || echo scan-failed; fi",
+      "assert": {
+        "matches": "scan-ran|trivy-absent"
+      },
+      "weight": 2
+    },
+    {
+      "id": "dd-sbom-generates",
+      "describe": "syft generates an SBOM of the serving image with a package count — the what-is-in-here bill of materials (section 3). Skips if syft is absent",
+      "run": "if ! command -v syft >/dev/null 2>&1; then echo syft-absent; else N=$(syft ghcr.io/ggml-org/llama.cpp:server -o syft-json 2>/dev/null | jq '.artifacts | length' 2>/dev/null); if [ -n \"$N\" ] && [ \"$N\" -gt 10 ] 2>/dev/null; then echo sbom-ok; else echo sbom-failed; fi; fi",
+      "assert": {
+        "matches": "sbom-ok|syft-absent"
+      },
+      "weight": 2
+    },
+    {
+      "id": "dd-signature-is-oci-referrer",
+      "describe": "the base signature is attached as an OCI referrer on the artifact digest (cosign v3), discoverable via cosign tree — the keyless/keyed common mechanism (section 4)",
+      "run": "bash labs/m7/seed.sh >/dev/null 2>&1; D=$(curl -sI -H 'Accept: application/vnd.oci.image.manifest.v1+json' http://localhost:5100/v2/opsmate/model/manifests/1.0.0 | awk 'tolower($1)==\"docker-content-digest:\"{print $2}' | tr -d '\\r'); R=$(curl -fsS \"http://localhost:5100/v2/opsmate/model/referrers/$D\" 2>/dev/null | jq '.manifests | length' 2>/dev/null); if [ -n \"$R\" ] && [ \"$R\" -ge 1 ] 2>/dev/null; then echo referrer-present; else echo referrer-missing; fi",
+      "assert": {
+        "contains": "referrer-present"
+      },
+      "weight": 3
+    }
+  ]
+}
