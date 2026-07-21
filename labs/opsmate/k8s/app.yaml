@@ -1,0 +1,224 @@
+# =============================================================================
+# OpsMate RAG app on Kubernetes — the M4 FastAPI backend joins the cluster (M10).
+#
+# Until now the app ran only in the Compose phase; the model server ran on K8s
+# (M8) and the canary/router beside it (M9). M10 brings the APP onto the cluster
+# too, because you cannot trace a pipeline that is not there — the ask ->
+# retrieve -> generate spans you read in Phoenix come from THIS pod. It is the
+# same image you built in M4, now carrying OTel instrumentation (main.py, M10)
+# that is inert unless OTEL_EXPORTER_OTLP_ENDPOINT is set — which this manifest
+# sets, to the in-cluster Phoenix collector.
+#
+# The pipeline's three dependencies, and how the pod reaches each:
+#   - generation  -> the M8 model Service, in-cluster DNS: http://opsmate-model:8080
+#   - embeddings  -> host Ollama, via the M8 hostAliases pattern (see below)
+#   - traces      -> the Phoenix Service (observability.yaml): http://phoenix:4317
+#   - corpus      -> a ConfigMap mounted at /corpus (the 14 runbooks, ~32 KB)
+#   - vector store-> embedded Chroma on an emptyDir at /data/chroma; a post-apply
+#                    ingest Job fills it (the app's own /ingest endpoint)
+#
+# Apply with the ISOLATED kubeconfig, same discipline as M8/M9:
+#   kubectl --kubeconfig k8s/kubeconfig apply -f k8s/app.yaml
+#
+# Image: build it and load it into the kind node before applying (the lab walks
+# this). `kind load` occasionally flakes on a containerd digest (the M8 spike
+# note); if it does, the pod falls back to a node pull — so the manifest sets
+# imagePullPolicy: IfNotPresent and the lab documents the node-pull retry.
+#   docker build -t opsmate-app:m10 labs/opsmate/app
+#   kind load docker-image opsmate-app:m10 --name opsmate
+# =============================================================================
+---
+# The 14 runbooks as a ConfigMap so the pod has a corpus WITHOUT a host mount or
+# a baked-in copy — self-contained on the cluster. It is mounted read-only at
+# /corpus, exactly where the app's CORPUS_DIR points, so /ingest walks it the
+# same way it did from the Compose bind mount. Regenerate this block from the
+# source corpus with (the lab shows it, so the file stays truthful to disk):
+#   kubectl --kubeconfig k8s/kubeconfig create configmap opsmate-corpus \
+#     --from-file=labs/opsmate/corpus --dry-run=client -o yaml
+# The committed copy below is a REFERENCE stub with two runbooks so the manifest
+# is readable; the lab regenerates the full 14-file ConfigMap from ./corpus so
+# the pod ingests the real corpus, not this excerpt.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opsmate-corpus
+  labels:
+    app: opsmate-app
+data:
+  # REFERENCE STUB — the lab replaces this ConfigMap with one generated from the
+  # full ./corpus directory (all 14 runbooks). Two are inlined here so the shape
+  # is legible and the manifest applies on its own for a smoke read.
+  payments-api-5xx.md: |
+    ## Payments API returning 5xx
+    First checks: confirm the database connection pool is not exhausted
+    (db_pool_in_use near max), then check upstream dependency latency. A sudden
+    5xx spike with healthy pods usually points at pool exhaustion or a slow
+    downstream, not the pod itself.
+  k8s-crashloop.md: |
+    ## Pod in CrashLoopBackOff
+    Read the previous container's logs first: kubectl logs <pod> --previous.
+    Then kubectl describe pod <pod> for the exit code and events. A tight restart
+    loop with a non-zero exit is the app dying on startup, not the scheduler.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsmate-app
+  labels:
+    app: opsmate-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsmate-app
+  template:
+    metadata:
+      labels:
+        app: opsmate-app
+    spec:
+      # --- reaching host Ollama for embeddings (the M8 hostAliases pattern) ---
+      # The app embeds no model; it calls host Ollama (nomic-embed-text) to embed
+      # the corpus and each query. A pod cannot reach the host by name on its own
+      # — `host.docker.internal` is not inherited by pods — so we pin that name to
+      # the node-resolved host IP, exactly as M8 pinned registry.local. UNLIKE M8
+      # this is NOT a designed-wrong exhibit: the M10 designed crash is the Phoenix
+      # one (observability.yaml). Set this to YOUR host IP before applying — the
+      # lab shows the one command that prints it:
+      #   docker exec opsmate-control-plane getent hosts host.docker.internal
+      # On the spike host it resolved to 192.168.5.2 — YOURS MAY DIFFER by runtime.
+      hostAliases:
+        - ip: "192.168.5.2"          # <-- SET THIS to your getent result (lab Step 2)
+          hostnames:
+            - "host.docker.internal"
+      containers:
+        - name: app
+          # The M4 image, built locally and loaded into the kind node. Never
+          # pulled from a public registry — IfNotPresent so the node uses the
+          # loaded image and does not try to fetch `opsmate-app:m10` from a hub.
+          image: opsmate-app:m10
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8001
+          env:
+            # generation -> the M8 model Service (in-cluster DNS name)
+            - name: MODEL_URL
+              value: "http://opsmate-model:8080"
+            # embeddings -> host Ollama through the hostAliases name above
+            - name: OLLAMA_URL
+              value: "http://host.docker.internal:11434"
+            - name: EMBED_MODEL
+              value: "nomic-embed-text"
+            - name: CHAT_MODEL
+              value: "qwen3-0.6b"
+            - name: CORPUS_DIR
+              value: "/corpus"
+            - name: CHROMA_DIR
+              value: "/data/chroma"
+            # --- M10: turn tracing ON by pointing at the Phoenix collector. ---
+            # This is the ONLY thing that makes the OTel code in main.py live. Unset
+            # it (as in Compose/CI) and the app is byte-for-byte the M4 behaviour.
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://phoenix:4317"
+            # No SYSTEM_PROMPT_FILE here: the K8s app uses the inline default
+            # prompt (the M5 mount is a Compose-phase concern; keep this pod simple).
+          resources:
+            # The app is light — FastAPI + embedded Chroma + httpx. It holds the
+            # 768-dim index for 14 runbooks in memory; a few hundred MiB covers it
+            # with headroom, well inside the 2.25 GiB the spike measured for the
+            # rest of the stack.
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "1"
+          readinessProbe:
+            # /health returns {"status":"ok","chunks":N}; ready as soon as the
+            # process is up. It is ready with an EMPTY index (chunks: 0) — the
+            # ingest Job fills it after; readiness gates traffic, not corpus state.
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+          volumeMounts:
+            - name: corpus
+              mountPath: /corpus
+              readOnly: true
+            - name: chroma
+              mountPath: /data/chroma
+      volumes:
+        - name: corpus
+          configMap:
+            name: opsmate-corpus
+        - name: chroma
+          # emptyDir, not a PVC: the index is cheap to rebuild (one /ingest call,
+          # a few seconds of embedding) and does not need to survive the pod. If a
+          # learner wants persistence they can swap in a PVC — but for M10 the
+          # point is the TRACE of the ingest+ask path, not durable storage.
+          emptyDir: {}
+---
+# The stable in-cluster address for the app. ClusterIP — the lab reaches it with
+# port-forward; nothing outside the cluster needs it. This is the Service the
+# ingest Job POSTs to and the port-forward target for driving /ask.
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsmate-app
+  labels:
+    app: opsmate-app
+spec:
+  selector:
+    app: opsmate-app
+  ports:
+    - name: http
+      port: 8001
+      targetPort: http
+  type: ClusterIP
+---
+# The in-cluster ingest step. The app starts with an EMPTY index (emptyDir); this
+# Job POSTs /ingest once the app is ready, so the pod walks /corpus, embeds every
+# runbook through host Ollama, and fills its Chroma store — the same /ingest the
+# Compose lab called by hand, run once in-cluster. It is a Job (runs to
+# completion, not a long-lived pod) and is safe to re-run: /ingest is idempotent
+# (deterministic chunk ids upsert in place). Re-run it any time with:
+#   kubectl --kubeconfig k8s/kubeconfig delete job opsmate-ingest --ignore-not-found
+#   kubectl --kubeconfig k8s/kubeconfig apply -f k8s/app.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opsmate-ingest
+  labels:
+    app: opsmate-app
+spec:
+  backoffLimit: 6              # embeddings need host Ollama up; retry a few times
+  template:
+    metadata:
+      labels:
+        app: opsmate-app
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: ingest
+          image: curlimages/curl:8.11.0    # tiny, multi-arch; just needs to POST
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              # Wait for the app to answer /health, then POST /ingest. The app
+              # Service name resolves in-cluster; no host mount, no secrets.
+              echo "waiting for opsmate-app to be ready ..."
+              until curl -fsS http://opsmate-app:8001/health >/dev/null 2>&1; do
+                sleep 3
+              done
+              echo "app ready — ingesting the corpus ..."
+              curl -fsS -X POST http://opsmate-app:8001/ingest
+              echo
+              echo "ingest complete."

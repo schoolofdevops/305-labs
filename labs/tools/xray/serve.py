@@ -22,6 +22,9 @@ REGISTRY = os.environ.get("REGISTRY_URL", "http://127.0.0.1:5100").rstrip("/")
 # `kubectl proxy --kubeconfig labs/opsmate/k8s/kubeconfig --port 8011` — the
 # same same-origin trick, one hop further.
 K8S = os.environ.get("K8S_PROXY_URL", "http://127.0.0.1:8011").rstrip("/")
+# Traces lens (M10): Phoenix reached through the learner's port-forward
+# (`kubectl port-forward svc/phoenix 16006:6006`).
+PHOENIX = os.environ.get("PHOENIX_URL", "http://127.0.0.1:16006").rstrip("/")
 EVALS_DIR = os.environ.get(
     "EVALS_DIR",
     os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -43,13 +46,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         pass
 
     PROXIES = (("/ollama/", "OLLAMA"), ("/llamacpp/", "LLAMACPP"), ("/app/", "APP"),
-               ("/registry/", "REGISTRY"), ("/k8s/", "K8S"))
+               ("/registry/", "REGISTRY"), ("/k8s/", "K8S"), ("/phoenix/", "PHOENIX"))
 
     def _route(self):
         for prefix, name in self.PROXIES:
             if self.path.startswith(prefix):
                 return prefix, {"OLLAMA": OLLAMA, "LLAMACPP": LLAMACPP, "APP": APP,
-                                "REGISTRY": REGISTRY, "K8S": K8S}[name]
+                                "REGISTRY": REGISTRY, "K8S": K8S, "PHOENIX": PHOENIX}[name]
         return None, None
 
     def do_GET(self):

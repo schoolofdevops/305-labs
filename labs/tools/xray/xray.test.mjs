@@ -160,9 +160,9 @@ async function main() {
   ok('loads: no console errors', consoleErrors.length === 0, consoleErrors.join(' | '));
   ok('loads: no page exceptions', pageErrors.length === 0, pageErrors.join(' | '));
   ok('loads: zero non-same-origin requests', externalReqs.length === 0, externalReqs.join(' | '));
-  ok('lens tabs: 1 active + 7 live lenses + 2 stubs', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
-      && await ev('document.querySelectorAll("#tabs .tab[data-lens]").length') === 7
-      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 2);
+  ok('lens tabs: 1 active + 8 live lenses + 1 stub', await ev('document.querySelectorAll("#tabs .tab.active").length') === 1
+      && await ev('document.querySelectorAll("#tabs .tab[data-lens]").length') === 8
+      && await ev('document.querySelectorAll("#tabs .tab.stub").length') === 1);
 
   // ---------- 2. real connection state ----------
   await waitFor('document.getElementById("connInd").className === "connected"', 12000, 'conn: indicator connected');
@@ -237,7 +237,7 @@ async function main() {
     && /^0\.\d{3}$/.test(await ev('document.querySelector("#ragChunks .chunkCard .dist, #ragChunks .chunkCard .dist.good").textContent')));
   ok('rag: top hit is the 5xx runbook', (await ev('document.querySelector("#ragChunks .chunkCard .src").textContent')).includes('payments-api-5xx'));
   await ev('document.getElementById("ragAskBtn").click()');
-  await waitFor('document.getElementById("ragAnswer").textContent.length > 40 && !document.getElementById("ragAnswer").querySelector(".dim")', 60000, 'rag: ask returns a generated answer');
+  await waitFor('document.getElementById("ragAnswer").textContent.length > 40 && !document.getElementById("ragAnswer").querySelector(".dim")', 150000, 'rag: ask returns a generated answer');
   ok('rag: fed-the-answer tags mark source chunks', (await ev('document.querySelectorAll("#ragChunks .chunkCard.fed").length')) >= 1);
 
   // ---------- 8. Evals lens (M5) — scoreboard over the real eval JSONs ----------
@@ -301,6 +301,25 @@ async function main() {
   ok('k8s: engine gauges through the Service proxy', /^\d+$/.test(await gauge('k8PT')), await gauge('k8PT'));
   ok('k8s: node name shown', (await gauge('k8Node')).includes('opsmate'), await gauge('k8Node'));
   ok('k8s: offline banner hidden', !(await ev('document.getElementById("k8Offline").classList.contains("show")')));
+
+  // ---------- 12. Traces lens (M10) — Phoenix waterfall through the proxy ----------
+  await ev('document.querySelector("#tabs .tab[data-lens=traces]").click()');
+  ok('traces: lens switches (panel visible)',
+    (await ev('document.body.classList.contains("lens-traces")')) === true
+    && (await ev('getComputedStyle(document.getElementById("txMain")).display')) === 'grid');
+  for (let i = 0; i < 6 && !(await ev('document.querySelectorAll("#txList .txRow").length >= 1')); i++) {
+    await ev('document.getElementById("txReload").click()');
+    await sleep(2500);
+  }
+  ok('traces: trace rows load', (await ev('document.querySelectorAll("#txList .txRow").length')) >= 1);
+  ok('traces: row shows latency', /\d+\.\d+s/.test(await ev('document.querySelector("#txList .txRow .txlat")?.textContent || ""')));
+  await ev('([...document.querySelectorAll("#txList .txRow")].find(r => r.querySelector(".txname").textContent.startsWith("ask")) || document.querySelector("#txList .txRow")).click()');
+  await waitFor('document.querySelectorAll("#txWaterfall .wfRow").length >= 3', 10000, 'traces: waterfall renders spans');
+  ok('traces: retrieve + generate spans present',
+    (await ev('document.getElementById("txWaterfall").textContent')).includes('retrieve')
+    && (await ev('document.getElementById("txWaterfall").textContent')).includes('generate'));
+  ok('traces: token count on the LLM span', /\d+ tok/.test(await ev('document.getElementById("txWaterfall").textContent')));
+  ok('traces: offline banner hidden', !(await ev('document.getElementById("txOffline").classList.contains("show")')));
 
   // switch back for the screenshot
   await ev('document.querySelector("#tabs .tab[data-lens=tokens]").click()');

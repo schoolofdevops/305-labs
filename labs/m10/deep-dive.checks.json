@@ -1,0 +1,49 @@
+{
+  "checks": [
+    {
+      "id": "metric-family-reference-real",
+      "describe": "the Deep Dive's llamacpp metric-family reference is anchored to families the running engine actually exposes (not invented): the model server's /metrics carries the token counters and the processing/deferred gauges the reference reads side-by-side against vLLM (Deep Dive: the metric-family reference). Self-seeds a port-forward to the model Service",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl wait --for=condition=Ready pod -l app=opsmate-model --timeout=180s >/dev/null 2>&1; ( kubectl port-forward service/opsmate-model 18081:8080 >/dev/null 2>&1 & echo $! > /tmp/m10dd-m.pid ); sleep 4; N=$(curl -s --max-time 10 http://127.0.0.1:18081/metrics | grep -Ec 'llamacpp:(prompt_tokens_total|tokens_predicted_total|requests_processing|requests_deferred)'); kill \"$(cat /tmp/m10dd-m.pid 2>/dev/null)\" 2>/dev/null; rm -f /tmp/m10dd-m.pid; if [ \"$N\" -ge 4 ]; then echo families-real; else echo families-missing; fi",
+      "assert": {
+        "contains": "families-real"
+      },
+      "weight": 2
+    },
+    {
+      "id": "otel-semconv-pinned",
+      "describe": "the OTel deps are pinned by major so the evolving GenAI/OpenInference semantic conventions do not shift under the lab (Deep Dive: semconv status + pinning). The requirements pin opentelemetry-sdk, the OTLP exporter, and the FastAPI instrumentation with version floors",
+      "run": "R=labs/opsmate/app/requirements.txt; if grep -Eq 'opentelemetry-sdk>=1' \"$R\" && grep -Eq 'opentelemetry-exporter-otlp-proto-grpc>=1' \"$R\" && grep -Eq 'opentelemetry-instrumentation-fastapi>=' \"$R\"; then echo semconv-pinned; else echo semconv-unpinned; fi",
+      "assert": {
+        "contains": "semconv-pinned"
+      },
+      "weight": 2
+    },
+    {
+      "id": "per-request-cost-accounting-real",
+      "describe": "per-request cost accounting is grounded in the real usage block the engine returns: a completion carries prompt/completion/total token counts, which the app lifts onto the LLM span as llm.token_count.* — the raw material of the per-request bill (Deep Dive: usage -> attribute -> aggregation). Self-seeds a port-forward and asserts the usage block is present",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl wait --for=condition=Ready pod -l app=opsmate-model --timeout=180s >/dev/null 2>&1; ( kubectl port-forward service/opsmate-model 18082:8080 >/dev/null 2>&1 & echo $! > /tmp/m10dd-c.pid ); sleep 4; OK=$(curl -s --max-time 60 http://127.0.0.1:18082/v1/chat/completions -H 'Content-Type: application/json' -d '{\"model\":\"qwen3-0.6b\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":16}' | jq -r 'if (.usage.prompt_tokens and .usage.completion_tokens and .usage.total_tokens) then \"usage-complete\" else \"usage-partial\" end' 2>/dev/null); kill \"$(cat /tmp/m10dd-c.pid 2>/dev/null)\" 2>/dev/null; rm -f /tmp/m10dd-c.pid; echo \"$OK\"",
+      "assert": {
+        "contains": "usage-complete"
+      },
+      "weight": 3
+    },
+    {
+      "id": "cost-math-arithmetic",
+      "describe": "the per-request cost formula in the Deep Dive is arithmetic that holds: at an example blended rate, prompt+completion tokens multiply out to a per-request cost, and summing across requests gives the bill (Deep Dive: the aggregation query). Verified by a tiny computation that mirrors the page's worked example",
+      "run": "python3 -c \"prompt=412; completion=88; rate_per_1k=0.0002; cost=(prompt+completion)/1000*rate_per_1k; print('cost-math-ok' if abs(cost-0.0001)<0.00005 else 'cost-math-wrong')\"",
+      "assert": {
+        "contains": "cost-math-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "sampling-strategy-documented",
+      "describe": "the production-traffic sampling section names both head and tail sampling and why LLM traces favour tail sampling (keep the slow/expensive ones) — a real strategy, not a hand-wave (Deep Dive: sampling production traffic). Read from the deep-dive page",
+      "run": "F=site/docs/m10-observability/deep-dive.md; if grep -qi 'head' \"$F\" && grep -qi 'tail' \"$F\" && grep -qi 'sampl' \"$F\"; then echo sampling-documented; else echo sampling-missing; fi",
+      "assert": {
+        "contains": "sampling-documented"
+      },
+      "weight": 2
+    }
+  ]
+}

@@ -1,0 +1,404 @@
+# =============================================================================
+# OpsMate observability stack on Kubernetes (M10) — the platform you can SEE.
+#
+# Three services, three jobs, one file:
+#   - Prometheus  scrapes the model server's /metrics (the M3 llamacpp families,
+#                 now cluster-scraped) every 5s and keeps 2h of history.
+#   - Grafana     reads Prometheus (provisioned datasource) and renders ONE
+#                 dashboard: the M1 metric model as a wall you watch move under
+#                 load. Login admin/admin (lab-local only).
+#   - Phoenix     receives the app's OTLP traces (4317) and renders the
+#                 ask -> retrieve -> generate waterfall (its UI on 6006).
+#
+# The memory shapes come from the M10 spike (measured, not guessed): prom 256Mi,
+# phoenix 768Mi; with the cluster + model + app + grafana this fits the 8 GB path
+# (spike measured 2.25 GiB for cluster+model+prom+phoenix; grafana adds ~300 MB).
+#
+# Apply with the ISOLATED kubeconfig (M8 discipline):
+#   kubectl --kubeconfig k8s/kubeconfig apply -f k8s/observability.yaml
+#
+# ---------------------------------------------------------------------------
+# !!! DESIGNED EXHIBIT — the Phoenix Deployment at the bottom of this file ships
+# WITHOUT the PHOENIX_PORT env, ON PURPOSE. A Service named `phoenix` makes
+# Kubernetes inject a service-link env var PHOENIX_PORT=tcp://<ip>:<port>, which
+# collides with Phoenix's own PHOENIX_PORT config and crashes the container. The
+# lab applies this as-is, reads the crash log (which names the fix), and adds the
+# one-line env fix that is marked `# FIX:` down there. Third designed crash of the
+# KIND phase (M8 hostAlias, M9 filename, M10 service-link). Do NOT pre-add the fix.
+# ---------------------------------------------------------------------------
+# =============================================================================
+
+# ============================ PROMETHEUS ====================================
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  labels:
+    app: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 5s          # tight, so the dashboard moves while you watch
+      evaluation_interval: 15s
+    scrape_configs:
+      # The one target that matters in M10: the model server's /metrics. This is
+      # the M3 Engine lens, industrialized — the same llamacpp families, now
+      # pulled by a cluster-resident scraper via the Service DNS name, not a
+      # laptop curl. Add the app or grafana here later if you want their metrics;
+      # for the metric-model lesson the model server is the whole story.
+      - job_name: opsmate-model
+        metrics_path: /metrics
+        static_configs:
+          - targets: ["opsmate-model:8080"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v3.1.0    # pinned, multi-arch
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            # 2h retention: this is a lab observer, not a long-term store. Small
+            # TSDB, small memory — the whole point is watching live, not history.
+            - "--storage.tsdb.retention.time=2h"
+          ports:
+            - name: http
+              containerPort: 9090
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"      # the spike-measured ceiling; 2h of one target fits
+              cpu: "1"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            periodSeconds: 10
+            failureThreshold: 6
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+  type: ClusterIP
+
+# ============================== GRAFANA =====================================
+---
+# Provisioned datasource: Grafana finds Prometheus on startup with NO click-ops.
+# The file lands in Grafana's provisioning path and it wires the datasource at
+# boot — so the dashboard below has data the moment Grafana is up.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource
+  labels:
+    app: grafana
+data:
+  datasource.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+---
+# Dashboard provider: point Grafana at a folder of dashboard JSON to auto-load.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  labels:
+    app: grafana
+data:
+  provider.yml: |
+    apiVersion: 1
+    providers:
+      - name: opsmate
+        orgId: 1
+        folder: ""
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards
+---
+# THE dashboard — the M1 metric model as a wall. Five panels, each with a
+# `description` field that teaches what it shows and why it is the LLM-specific
+# signal (hover the panel title in Grafana to read it). The queries use the real
+# llamacpp families the model server exposes (M3): token counters, per-second
+# gauges, and the processing/deferred gauges that show the queue forming.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-opsmate
+  labels:
+    app: grafana
+data:
+  opsmate.json: |
+    {
+      "title": "OpsMate — Model Server (LLM signals)",
+      "uid": "opsmate-llm",
+      "schemaVersion": 39,
+      "editable": true,
+      "time": { "from": "now-15m", "to": "now" },
+      "refresh": "5s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Decode throughput (tokens/s)",
+          "type": "timeseries",
+          "description": "How fast the engine EMITS answer tokens — the decode phase (M1 TPOT, inverted). This is the number that holds steady under batching: as concurrency rises, a batching engine keeps decode tok/s up rather than letting each request slow down. Watch it hold while requests queue.",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [
+            { "expr": "llamacpp:predicted_tokens_seconds", "legendFormat": "decode tok/s" }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Prompt processing rate (tokens/s)",
+          "type": "timeseries",
+          "description": "How fast the engine READS prompt tokens — the prefill phase (M1 TTFT source). A long prompt spends its time here before the first answer token appears. Compare this against decode tok/s to see which phase a slow request is spending its time in.",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [
+            { "expr": "llamacpp:prompt_tokens_seconds", "legendFormat": "prompt tok/s" }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Requests processing (active)",
+          "type": "timeseries",
+          "description": "Requests the engine is working on RIGHT NOW. On a single engine this is bounded by its slot count; under load it pins at the ceiling. This is the 'kitchen is full' signal — pair it with the deferred panel to see the queue.",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+          "targets": [
+            { "expr": "llamacpp:requests_processing", "legendFormat": "processing" }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Requests deferred (queued)",
+          "type": "timeseries",
+          "description": "Requests WAITING for a slot — the queue. This is the signal that answers 'why does it feel slow' when the engine itself is healthy: the request is not slow, it is waiting. When you drive the M3 loadtest, watch this climb while decode tok/s holds — that is queueing, not a slow model. It is the number an autoscaler (M11) will watch.",
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+          "targets": [
+            { "expr": "llamacpp:requests_deferred", "legendFormat": "deferred" }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "Lifetime tokens (prompt vs generated)",
+          "type": "timeseries",
+          "description": "Cumulative token counters since the engine started — prompt tokens read and answer tokens generated. These are the raw material of cost: every token here is compute you paid for. The Deep Dive sums the per-request version of exactly these off the trace spans to build a per-request bill.",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+          "targets": [
+            { "expr": "llamacpp:prompt_tokens_total", "legendFormat": "prompt tokens" },
+            { "expr": "llamacpp:tokens_predicted_total", "legendFormat": "generated tokens" }
+          ]
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.4.0    # pinned, multi-arch
+          env:
+            # Lab-local credentials only — this Grafana is never exposed off the
+            # cluster (ClusterIP + port-forward). admin/admin so first login is
+            # one step; Grafana will prompt to change it, which you can skip.
+            - name: GF_SECURITY_ADMIN_USER
+              value: "admin"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: "admin"
+            # Anonymous view so the port-forward lands straight on the dashboard
+            # without a login wall getting in the way of the lesson.
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 3000
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "384Mi"
+              cpu: "1"
+          volumeMounts:
+            - name: datasource
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 12       # grafana boot + provisioning takes a moment
+      volumes:
+        - name: datasource
+          configMap:
+            name: grafana-datasource
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboard-opsmate
+            items:
+              - key: opsmate.json
+                path: opsmate.json
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  labels:
+    app: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+  type: ClusterIP
+
+# ============================== PHOENIX =====================================
+# Arize Phoenix — the trace collector + UI. It accepts OTLP gRPC on 4317 (where
+# the app sends spans) and serves its own UI on 6006 (where you read the
+# waterfall). This is the SECOND half of observability: Prometheus/Grafana are
+# the ward chart (vitals over time); Phoenix is the case file (one request's
+# whole journey).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phoenix
+  labels:
+    app: phoenix
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: phoenix
+  template:
+    metadata:
+      labels:
+        app: phoenix
+    spec:
+      containers:
+        - name: phoenix
+          image: arizephoenix/phoenix:version-7.9.0   # pinned, multi-arch
+          # ---------------------------------------------------------------
+          # DESIGNED CRASH EXHIBIT (M10). This container ships with NO env
+          # block on purpose. Because there is a Service named `phoenix`
+          # (below), Kubernetes injects a service-link env into this pod:
+          #     PHOENIX_PORT=tcp://10.96.x.x:6006
+          # Phoenix ALSO reads PHOENIX_PORT as its own listen-port config, so
+          # it receives "tcp://10.96.x.x:6006" where it expects an integer and
+          # crashes at startup with an error that names the fix. Apply this as
+          # shipped, read the crash log, then UNCOMMENT the env block below.
+          #
+          # FIX (uncomment the three lines below to resolve the crash — lab Step 3):
+          # env:
+          #   - name: PHOENIX_PORT
+          #     value: "6006"
+          # An alternative fix is `enableServiceLinks: false` on the pod spec,
+          # which stops Kubernetes injecting ANY service-link envs; the explicit
+          # PHOENIX_PORT override is the narrower, clearer fix and the one the
+          # crash log points at. The Deep Dive discusses both.
+          # ---------------------------------------------------------------
+          ports:
+            - name: otlp
+              containerPort: 4317
+            - name: ui
+              containerPort: 6006
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "100m"
+            limits:
+              memory: "768Mi"       # spike-measured; Phoenix holds traces in memory
+              cpu: "1"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: ui
+            periodSeconds: 10
+            failureThreshold: 12
+      # NOTE: leaving enableServiceLinks at its default (true) is what makes the
+      # exhibit fire. The env fix above is the intended resolution.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: phoenix
+  labels:
+    app: phoenix
+spec:
+  selector:
+    app: phoenix
+  ports:
+    - name: otlp
+      port: 4317
+      targetPort: otlp
+    - name: ui
+      port: 6006
+      targetPort: ui
+  type: ClusterIP

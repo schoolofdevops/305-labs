@@ -163,6 +163,30 @@
   .chunkCard.fed .fedTag{display:inline}
   #ragEmpty{color:var(--faint);font-size:.84rem;font-family:var(--mono)}
 
+  /* ---------- traces lens (M10) ---------- */
+  body.lens-traces #main,body.lens-traces #bar,body.lens-traces #engMain,body.lens-traces #ragMain,body.lens-traces #evMain,body.lens-traces #trMain,body.lens-traces #arMain,body.lens-traces #k8Main{display:none}
+  #txMain{display:none;flex:1 1 auto;min-height:0;grid-template-columns:clamp(260px,24rem,380px) 1fr;gap:6px}
+  body.lens-traces #txMain{display:grid}
+  #txLeft{display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto;scrollbar-width:thin}
+  #txOffline{display:none;border:1px dashed rgba(245,185,66,.5);border-radius:9px;padding:10px 12px;
+    color:var(--warn);font-size:.9rem;line-height:1.5;background:rgba(245,185,66,.06)}
+  #txOffline.show{display:block}
+  #txOffline code{font-family:var(--mono);font-size:.84rem;color:var(--txt);background:rgba(255,255,255,.06);padding:0 4px;border-radius:4px}
+  .txRow{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.78rem;
+    border:1px solid var(--line);border-radius:7px;padding:4px 8px;background:var(--panel2);cursor:pointer}
+  .txRow:hover{border-color:var(--accent)} .txRow.sel{border-color:var(--accent);background:rgba(76,201,240,.08)}
+  .txRow .txname{flex:1;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .txRow .txlat{color:var(--warn);white-space:nowrap} .txRow .txtok{color:var(--accent2);white-space:nowrap;font-size:.72rem}
+  #txDetail{display:flex;flex-direction:column;min-height:0}
+  #txWaterfall{flex:1;overflow-y:auto;scrollbar-width:thin;padding:6px 2px}
+  .wfRow{margin-bottom:8px}
+  .wfLabel{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.76rem;color:var(--dim);margin-bottom:2px}
+  .wfLabel b{color:var(--txt)}
+  .wfTrack{height:.9rem;background:#0e1526;border:1px solid var(--line2);border-radius:5px;position:relative}
+  .wfBar{position:absolute;top:0;height:100%;border-radius:5px;background:linear-gradient(90deg,#7b6cf6,#4cc9f0)}
+  .wfBar.retr{background:linear-gradient(90deg,#3ddc97,#2eb47c)} .wfBar.llm{background:linear-gradient(90deg,#f5b942,#e09f1f)}
+  #txInput{font-family:var(--mono);font-size:.76rem;color:var(--faint);padding:4px 2px;word-break:break-word;max-height:4.5em;overflow:hidden}
+
   /* ---------- k8s lens (M8) ---------- */
   body.lens-k8s #main,body.lens-k8s #bar,body.lens-k8s #engMain,body.lens-k8s #ragMain,body.lens-k8s #evMain,body.lens-k8s #trMain,body.lens-k8s #arMain{display:none}
   #k8Main{display:none;flex:1 1 auto;min-height:0;grid-template-columns:1fr clamp(240px,21rem,340px);gap:6px}
@@ -280,7 +304,7 @@
       <button class="tab" data-lens="train">Train</button>
       <button class="tab" data-lens="artifacts">Artifacts</button>
       <button class="tab" data-lens="k8s">K8s</button>
-      <button class="tab stub" title="lands with M10">Traces<small>M10</small></button>
+      <button class="tab" data-lens="traces">Traces</button>
       <button class="tab stub" title="lands with M12">Spend<small>M12</small></button>
     </div>
     <div id="hdrRight">
@@ -382,6 +406,25 @@
         <h2>Retrieved chunks — live from your index</h2>
         <div id="ragChunks"><span id="ragEmpty">no retrieval yet</span></div>
       </div>
+    </div>
+  </div>
+
+  <div id="txMain">
+    <div id="txLeft">
+      <div id="txOffline">
+        Phoenix is not reachable. With the M10 stack up, start the forward in another
+        terminal — <code>kubectl --kubeconfig labs/opsmate/k8s/kubeconfig port-forward svc/phoenix 16006:6006</code> —
+        then drive an <code>/ask</code> and press Reload. Set <code>PHOENIX_URL</code> if it listens elsewhere.
+      </div>
+      <div class="panel">
+        <h2>Recent traces <button id="txReload" style="font-size:.78rem;padding:2px 10px;border-radius:7px;border:1px solid var(--accent);color:var(--accent);background:rgba(76,201,240,.08);cursor:pointer;margin-left:auto;float:right">Reload</button></h2>
+        <div id="txList" style="display:flex;flex-direction:column;gap:4px"></div>
+      </div>
+    </div>
+    <div class="panel" id="txDetail">
+      <h2>Waterfall — <span id="txSel" style="text-transform:none;letter-spacing:0">select a trace</span></h2>
+      <div id="txInput"></div>
+      <div id="txWaterfall"></div>
     </div>
   </div>
 
@@ -724,7 +767,7 @@
 
   /* ---------- presets: the two contrasting experiments from the lab ---------- */
   /* ---------- lens switching (M3+) ---------- */
-  const LENS_NAMES = { tokens: 'Tokens lens', engine: 'Engine lens', rag: 'RAG lens', evals: 'Evals lens', train: 'Train lens', artifacts: 'Artifacts lens', k8s: 'K8s lens' };
+  const LENS_NAMES = { tokens: 'Tokens lens', engine: 'Engine lens', rag: 'RAG lens', evals: 'Evals lens', train: 'Train lens', artifacts: 'Artifacts lens', k8s: 'K8s lens', traces: 'Traces lens' };
   document.querySelectorAll('#tabs .tab[data-lens]').forEach(t => t.addEventListener('click', () => {
     document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
@@ -735,7 +778,91 @@
     if (lens === 'train') trPoll();
     if (lens === 'artifacts') loadArtifacts();
     if (lens === 'k8s') k8Poll();
+    if (lens === 'traces') loadTraces();
   }));
+
+  /* ---------- Traces lens (M10): Phoenix GraphQL through the proxy ---------- */
+  function phxAttr(attrs, dotted) {
+    // Phoenix GraphQL explodes dotted keys into nested objects — read either shape.
+    try {
+      const at = typeof attrs === "string" ? JSON.parse(attrs) : attrs;
+      if (dotted in at) return at[dotted];
+      let cur = at;
+      for (const part of dotted.split(".")) { if (cur == null) return undefined; cur = cur[part]; }
+      return cur;
+    } catch (e) { return undefined; }
+  }
+  async function phxGql(query) {
+    const r = await fetch("/phoenix/graphql", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    const d = await r.json();
+    if (d.error || d.errors) throw new Error(JSON.stringify(d.error || d.errors));
+    return d.data;
+  }
+  async function loadTraces() {
+    const box = $("txList");
+    try {
+      const d = await phxGql(`{ projects { edges { node { name spans(first: 80, sort: {col: startTime, dir: desc}) { edges { node { context { traceId } name spanKind latencyMs startTime attributes } } } } } } }`);
+      $("txOffline").classList.remove("show");
+      const spans = (d.projects.edges[0]?.node.spans.edges || []).map(e => e.node);
+      // group by traceId; root = span named ask (or earliest)
+      const byTrace = {};
+      for (const sp of spans) (byTrace[sp.context.traceId] ??= []).push(sp);
+      box.innerHTML = "";
+      const traces = Object.entries(byTrace)
+        .map(([id, ss]) => ({ id, ss, root: ss.find(s => s.name === "ask") || ss.reduce((a, b) => (a.startTime < b.startTime ? a : b)) }))
+        .filter(t => !/^GET \/health/.test(t.root.name))   // probe noise stays out of the list
+        .sort((a, b) => (a.root.startTime < b.root.startTime ? 1 : -1)).slice(0, 15);
+      for (const t of traces) {
+        let toks = "";
+        for (const sp of t.ss) {
+          const n = phxAttr(sp.attributes, "llm.token_count.total"); if (n) toks = n + " tok";
+        }
+        const row = document.createElement("div");
+        row.className = "txRow";
+        row.innerHTML = `<span class="txname"></span><span class="txtok"></span><span class="txlat"></span>`;
+        row.querySelector(".txname").textContent = t.root.name + " · " + t.id.slice(0, 8);
+        row.querySelector(".txtok").textContent = toks;
+        row.querySelector(".txlat").textContent = (t.root.latencyMs / 1000).toFixed(2) + "s";
+        row.addEventListener("click", () => showWaterfall(t, row));
+        box.appendChild(row);
+      }
+      if (!traces.length) box.innerHTML = '<span style="color:var(--faint);font-family:var(--mono);font-size:.82rem">no traces yet — drive an /ask, then Reload</span>';
+    } catch (e) {
+      $("txOffline").classList.add("show");
+      box.innerHTML = "";
+    }
+  }
+  function showWaterfall(t, row) {
+    document.querySelectorAll(".txRow").forEach(r => r.classList.remove("sel"));
+    row.classList.add("sel");
+    $("txSel").textContent = t.root.name + " · " + (t.root.latencyMs / 1000).toFixed(2) + "s";
+    let input = "";
+    input = phxAttr(t.root.attributes, "input.value") || "";
+    $("txInput").textContent = input ? "input: " + String(input).slice(0, 220) : "";
+    const t0 = new Date(t.root.startTime).getTime();
+    const total = Math.max(1, t.root.latencyMs);
+    const wf = $("txWaterfall");
+    wf.innerHTML = "";
+    const order = [...t.ss].sort((a, b) => (a.startTime < b.startTime ? -1 : 1));
+    for (const sp of order) {
+      const off = Math.max(0, new Date(sp.startTime).getTime() - t0);
+      const leftPct = Math.min(97, off / total * 100);
+      const widPct = Math.max(1.5, Math.min(100 - leftPct, sp.latencyMs / total * 100));
+      let toks = "";
+      const tn = phxAttr(sp.attributes, "llm.token_count.total"); if (tn) toks = " · " + tn + " tok";
+      const cls = sp.spanKind === "RETRIEVER" || /retrieve/i.test(sp.name) ? "retr" : (sp.spanKind === "LLM" || /generate/i.test(sp.name) ? "llm" : "");
+      const div = document.createElement("div");
+      div.className = "wfRow";
+      div.innerHTML = `<div class="wfLabel"><b></b><span></span></div><div class="wfTrack"><div class="wfBar ${cls}" style="left:${leftPct}%;width:${widPct}%"></div></div>`;
+      div.querySelector("b").textContent = sp.name + (sp.spanKind && sp.spanKind !== "UNKNOWN" ? " [" + sp.spanKind + "]" : "");
+      div.querySelector(".wfLabel span").textContent = (sp.latencyMs / 1000).toFixed(2) + "s" + toks;
+      wf.appendChild(div);
+    }
+  }
+  $("txReload").addEventListener("click", loadTraces);
 
   /* ---------- K8s lens (M8): the real cluster via kubectl proxy ---------- */
   let k8Timer = null;

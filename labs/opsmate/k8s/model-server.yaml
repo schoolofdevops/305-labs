@@ -73,7 +73,7 @@ spec:
       # On the spike host the real value resolved to 192.168.5.2 — YOURS MAY DIFFER by
       # container runtime. This is the one value in the file that is host-specific.
       hostAliases:
-        - ip: "127.0.0.1"            # <-- WRONG on purpose; replace with your getent result (Step 4)
+        - ip: "127.0.0.1"            # <-- WRONG on purpose; replace with your getent result (M8 Step 4 / M10 Step 1)
           hostnames:
             - "registry.local"
       initContainers:

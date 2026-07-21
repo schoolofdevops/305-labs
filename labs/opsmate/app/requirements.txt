@@ -4,3 +4,13 @@ fastapi>=0.115,<1
 uvicorn[standard]>=0.34,<1
 chromadb>=1.0,<2
 httpx>=0.28,<1
+
+# M10: OpenTelemetry — the app emits traces of its own ask->retrieve->generate
+# pipeline to an OTLP collector (Phoenix). Majors pinned; the OTel Python line
+# ships API+SDK in lockstep (1.x) and the instrumentation/exporter packages track
+# a separate 0.x line that moves with it, so pin the floor and let the minor float.
+# ALL of this is inert unless OTEL_EXPORTER_OTLP_ENDPOINT is set at runtime — the
+# import is guarded, so the Compose phase (no endpoint) is byte-for-byte unaffected.
+opentelemetry-sdk>=1.27,<2
+opentelemetry-exporter-otlp-proto-grpc>=1.27,<2
+opentelemetry-instrumentation-fastapi>=0.48b0,<1

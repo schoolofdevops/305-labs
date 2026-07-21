@@ -12,7 +12,7 @@ no fake numbers — and grows one lens per module.
 | **Train** | M6 | Tails your real `train/progress.jsonl` live: loss curve for the whole run, step/lr/elapsed/sec-per-step gauges, first-vs-latest loss, and the run-complete summary banner |
 | **Artifacts** | M7 | Browses your real Zot registry: repos and tags with per-tag SIGNED/unsigned badges (OCI referrers API, sigstore-aware), and per-tag layer tables showing the 610 MB model layer against the KB-sized prompt/dataset layers |
 | **K8s** | M8 | Your real cluster via `kubectl proxy` (same-origin, one hop further): pods with phase/ready/restarts, the serving Deployment's replica status, the engine gauges scraped through the Service proxy, and recent events |
-| Traces | M10 | _lands with M10_ |
+| **Traces** | M10 | The case-file view: recent traces from your real Phoenix (probe noise filtered), each opening into a waterfall — ask/retrieve/generate bars on a shared timeline with per-span latency and the LLM span's token count (the per-request bill) |
 | Spend | M12 | _lands with M12_ |
 
 ## Run it
@@ -39,6 +39,7 @@ again in the K8s phase of the course. If a tool ever asks you to paste a secret 
 web page, ask why it didn't do this instead.
 
 Ollama listening elsewhere? `OLLAMA_HOST_URL=http://other-host:11434 bash serve.sh`.
+Phoenix elsewhere (Traces lens)? `PHOENIX_URL=http://other-host:16006 bash serve.sh`.
 llama-server elsewhere (Engine lens)? `LLAMACPP_URL=http://other-host:8080 bash serve.sh`.
 OpsMate app elsewhere (RAG lens)? `APP_URL=http://other-host:8001 bash serve.sh`.
 

@@ -1,0 +1,94 @@
+{
+  "checks": [
+    {
+      "id": "kind-cluster-node-ready",
+      "describe": "the slim KIND cluster is up and its node reports Ready via the isolated kubeconfig (Step 1). Self-seeds with make k8s-up if absent",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; kubectl get nodes 2>/dev/null | grep -c ' Ready ' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo node-ready; else echo node-not-ready; fi'",
+      "assert": {
+        "contains": "node-ready"
+      },
+      "weight": 2
+    },
+    {
+      "id": "model-server-running",
+      "describe": "the M8 base model server is 1/1 Running from the signed 1.0.0 kit — the scrape target and the generation backend (Step 1). Self-seeds: cluster up, kits present, apply model-server.yaml with the host-IP hostAlias resolved, wait Ready",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; bash labs/m7/seed.sh >/dev/null 2>&1 || true; HIP=$(docker exec opsmate-control-plane getent hosts host.docker.internal 2>/dev/null | awk '{print $1}'); HIP=${HIP:-127.0.0.1}; sed \"s#ip: \\\"127.0.0.1\\\"#ip: \\\"$HIP\\\"#\" labs/opsmate/k8s/model-server.yaml | kubectl apply -f - >/dev/null 2>&1; kubectl wait --for=condition=Ready pod -l app=opsmate-model --timeout=240s >/dev/null 2>&1; kubectl get pods -l app=opsmate-model 2>/dev/null | grep -c '1/1 *Running' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo model-running; else echo model-down; fi'",
+      "assert": {
+        "contains": "model-running"
+      },
+      "weight": 3
+    },
+    {
+      "id": "app-image-otel-instrumented",
+      "describe": "the app source carries the M10 OTel instrumentation: env-gated on OTEL_EXPORTER_OTLP_ENDPOINT, manual ask/retrieve/generate spans, openinference token-count attributes, and the OTel deps in requirements (Step 2)",
+      "run": "M=labs/opsmate/app/main.py; R=labs/opsmate/app/requirements.txt; if grep -q 'OTEL_EXPORTER_OTLP_ENDPOINT' \"$M\" && grep -q 'start_as_current_span' \"$M\" && grep -q 'llm.token_count' \"$M\" && grep -q 'openinference.span.kind' \"$M\" && grep -q 'opentelemetry-sdk' \"$R\"; then echo otel-instrumented; else echo otel-missing; fi",
+      "assert": {
+        "contains": "otel-instrumented"
+      },
+      "weight": 2
+    },
+    {
+      "id": "app-on-cluster-answers-through-service",
+      "describe": "the OpsMate app runs on the cluster and answers /health through its Service (Step 2). Self-seeds: build+load the image, resolve the host-IP hostAlias, apply app.yaml (with the full corpus ConfigMap regenerated from ./corpus), wait Ready, port-forward, hit /health",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; docker build -t opsmate-app:m10 labs/opsmate/app >/dev/null 2>&1; kind load docker-image opsmate-app:m10 --name opsmate >/dev/null 2>&1 || true; HIP=$(docker exec opsmate-control-plane getent hosts host.docker.internal 2>/dev/null | awk '{print $1}'); HIP=${HIP:-127.0.0.1}; kubectl create configmap opsmate-corpus --from-file=labs/opsmate/corpus --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1; sed \"s#ip: \\\"192.168.5.2\\\"#ip: \\\"$HIP\\\"#\" labs/opsmate/k8s/app.yaml | kubectl apply -f - >/dev/null 2>&1; kubectl wait --for=condition=Ready pod -l app=opsmate-app --timeout=180s >/dev/null 2>&1; ( kubectl port-forward service/opsmate-app 18001:8001 >/dev/null 2>&1 & echo $! > /tmp/m10-app.pid ); sleep 4; OUT=$(curl -s --max-time 10 http://127.0.0.1:18001/health | grep -c 'ok'); kill \"$(cat /tmp/m10-app.pid 2>/dev/null)\" 2>/dev/null; rm -f /tmp/m10-app.pid; if [ \"$OUT\" -ge 1 ]; then echo app-healthy; else echo app-down; fi",
+      "assert": {
+        "contains": "app-healthy"
+      },
+      "weight": 3
+    },
+    {
+      "id": "phoenix-env-fix-designed-exhibit",
+      "describe": "observability.yaml ships the Phoenix service-link crash exhibit: a Service named phoenix, the phoenix Deployment WITHOUT the PHOENIX_PORT env applied, and a clearly-marked FIX line naming the resolution (Step 3)",
+      "run": "F=labs/opsmate/k8s/observability.yaml; if grep -q 'name: phoenix' \"$F\" && grep -q 'DESIGNED CRASH EXHIBIT' \"$F\" && grep -q 'FIX' \"$F\" && grep -q 'PHOENIX_PORT' \"$F\"; then echo exhibit-present; else echo exhibit-absent; fi",
+      "assert": {
+        "contains": "exhibit-present"
+      },
+      "weight": 2
+    },
+    {
+      "id": "observability-stack-running",
+      "describe": "prometheus, grafana, and phoenix are all Running after the PHOENIX_PORT env fix is applied (Step 3-5). Self-seeds: apply observability.yaml with the phoenix env fix injected (the designed crash resolved), wait all three Ready",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; awk '/# env:/{sub(/# env:/,\"env:\")} /#   - name: PHOENIX_PORT/{sub(/#   - name: PHOENIX_PORT/,\"  - name: PHOENIX_PORT\")} /#     value: \\\"6006\\\"/{sub(/#     value: \\\"6006\\\"/,\"    value: \\\"6006\\\"\")} {print}' labs/opsmate/k8s/observability.yaml | kubectl apply -f - >/dev/null 2>&1; kubectl wait --for=condition=Ready pod -l app=prometheus --timeout=120s >/dev/null 2>&1; kubectl wait --for=condition=Ready pod -l app=grafana --timeout=120s >/dev/null 2>&1; kubectl wait --for=condition=Ready pod -l app=phoenix --timeout=120s >/dev/null 2>&1; P=$(kubectl get pods -l app=prometheus 2>/dev/null | grep -c '1/1 *Running'); G=$(kubectl get pods -l app=grafana 2>/dev/null | grep -c '1/1 *Running'); X=$(kubectl get pods -l app=phoenix 2>/dev/null | grep -c '1/1 *Running'); if [ \"$P\" -ge 1 ] && [ \"$G\" -ge 1 ] && [ \"$X\" -ge 1 ]; then echo obs-running; else echo obs-incomplete; fi",
+      "assert": {
+        "contains": "obs-running"
+      },
+      "weight": 3
+    },
+    {
+      "id": "prometheus-scrape-target-up",
+      "describe": "Prometheus has the model server as a scrape target and it reports up — the M3 llamacpp families are now cluster-scraped (Step 4). Self-seeds a port-forward to Prometheus, queries the up metric for the opsmate-model job",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl wait --for=condition=Ready pod -l app=prometheus --timeout=120s >/dev/null 2>&1; ( kubectl port-forward service/prometheus 19090:9090 >/dev/null 2>&1 & echo $! > /tmp/m10-prom.pid ); sleep 4; V=$(curl -s --max-time 10 'http://127.0.0.1:19090/api/v1/query?query=up%7Bjob%3D%22opsmate-model%22%7D' | jq -r '.data.result[0].value[1]' 2>/dev/null); kill \"$(cat /tmp/m10-prom.pid 2>/dev/null)\" 2>/dev/null; rm -f /tmp/m10-prom.pid; if [ \"$V\" = \"1\" ]; then echo target-up; else echo target-down:\"$V\"; fi",
+      "assert": {
+        "contains": "target-up"
+      },
+      "weight": 3
+    },
+    {
+      "id": "grafana-dashboard-provisioned",
+      "describe": "Grafana provisioned the OpsMate dashboard (the LLM-signals wall) from the ConfigMap at boot — it is queryable by its uid (Step 5). Self-seeds a port-forward to Grafana and asks its API for the dashboard",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl wait --for=condition=Ready pod -l app=grafana --timeout=120s >/dev/null 2>&1; ( kubectl port-forward service/grafana 13000:3000 >/dev/null 2>&1 & echo $! > /tmp/m10-graf.pid ); sleep 5; T=$(curl -s --max-time 10 http://admin:admin@127.0.0.1:13000/api/dashboards/uid/opsmate-llm | jq -r '.dashboard.uid' 2>/dev/null); kill \"$(cat /tmp/m10-graf.pid 2>/dev/null)\" 2>/dev/null; rm -f /tmp/m10-graf.pid; if [ \"$T\" = \"opsmate-llm\" ]; then echo dashboard-provisioned; else echo dashboard-missing:\"$T\"; fi",
+      "assert": {
+        "contains": "dashboard-provisioned"
+      },
+      "weight": 2
+    },
+    {
+      "id": "ask-through-cluster-emits-trace",
+      "describe": "an /ask request runs the full pipeline on the cluster (ingest first so the index is filled), and Phoenix records at least one trace with the ask->retrieve->generate spans (Step 2 + Step 6). Self-seeds ingest, port-forwards the app and Phoenix, drives /ask, then queries Phoenix GraphQL for a non-zero traceCount",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl delete job opsmate-ingest --ignore-not-found >/dev/null 2>&1; HIP=$(docker exec opsmate-control-plane getent hosts host.docker.internal 2>/dev/null | awk '{print $1}'); HIP=${HIP:-127.0.0.1}; sed \"s#ip: \\\"192.168.5.2\\\"#ip: \\\"$HIP\\\"#\" labs/opsmate/k8s/app.yaml | kubectl apply -f - >/dev/null 2>&1; kubectl create configmap opsmate-corpus --from-file=labs/opsmate/corpus --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1; kubectl wait --for=condition=complete job/opsmate-ingest --timeout=180s >/dev/null 2>&1; kubectl wait --for=condition=Ready pod -l app=opsmate-app --timeout=180s >/dev/null 2>&1; ( kubectl port-forward service/opsmate-app 18002:8001 >/dev/null 2>&1 & echo $! > /tmp/m10-a2.pid ); sleep 4; curl -s --max-time 120 'http://127.0.0.1:18002/ask?q=the%20payments%20api%20is%20throwing%20500s' >/dev/null 2>&1; kill \"$(cat /tmp/m10-a2.pid 2>/dev/null)\" 2>/dev/null; rm -f /tmp/m10-a2.pid; sleep 3; ( kubectl port-forward service/phoenix 16006:6006 >/dev/null 2>&1 & echo $! > /tmp/m10-px.pid ); sleep 4; C=$(curl -s --max-time 10 http://127.0.0.1:16006/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ projects { edges { node { traceCount } } } }\"}' | grep -oE '\"traceCount\": *[0-9]+' | grep -oE '[0-9]+' | sort -rn | head -1); kill \"$(cat /tmp/m10-px.pid 2>/dev/null)\" 2>/dev/null; rm -f /tmp/m10-px.pid; C=${C:-0}; if [ \"$C\" -ge 1 ]; then echo trace-recorded; else echo no-trace:\"$C\"; fi",
+      "assert": {
+        "contains": "trace-recorded"
+      },
+      "weight": 3
+    },
+    {
+      "id": "loadtest-reused-from-m3",
+      "describe": "the M3 bounded loadtest is reused as-is to drive the dashboard wall under load (Step 5) — it runs against the model server through a port-forward and prints per-level throughput lines. Laptop-safe tiny profile; self-seeds a port-forward",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl wait --for=condition=Ready pod -l app=opsmate-model --timeout=180s >/dev/null 2>&1; ( kubectl port-forward service/opsmate-model 18080:8080 >/dev/null 2>&1 & echo $! > /tmp/m10-lt.pid ); sleep 4; N=$(OPENAI_BASE_URL=http://127.0.0.1:18080/v1 MODEL=qwen3-0.6b REQUESTS=6 LEVELS=2,4 MAX_TOKENS=16 uv run --quiet labs/m3/loadtest.py 2>/dev/null | grep -c 'throughput='); kill \"$(cat /tmp/m10-lt.pid 2>/dev/null)\" 2>/dev/null; rm -f /tmp/m10-lt.pid; if [ \"$N\" -ge 2 ]; then echo loadtest-ok; else echo loadtest-fail; fi",
+      "assert": {
+        "contains": "loadtest-ok"
+      },
+      "weight": 2
+    }
+  ]
+}
