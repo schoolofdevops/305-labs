@@ -1,0 +1,58 @@
+# ============================================================================
+# OpsMate gateway stack (M12) — LiteLLM + Postgres + Presidio, Compose phase.
+#
+# This is the "front door" for OpsMate v3.0. One process every client talks to;
+# behind it: virtual keys, budgets, caching, fallback, and PII/injection
+# guardrails. It runs on the COMPOSE path (the KIND cluster is DOWN — one
+# heavyweight stack at a time). Total steady footprint ~1.9 GiB on the 8 GB
+# path, so it fits alongside host Ollama.
+#
+# Backend is host Ollama over an OpenAI-compatible surface, so nothing about the
+# client changes vs. the earlier modules — only the door in front of it.
+# ============================================================================
+services:
+  pg:
+    # LiteLLM needs a real datastore for the features that PERSIST: virtual keys
+    # and their running spend. Without pg, /key/generate has nowhere to write the
+    # key row, so budgets cannot be enforced. 256m is plenty (settles ~38 MiB).
+    image: postgres:16-alpine
+    environment: {POSTGRES_USER: litellm, POSTGRES_PASSWORD: litellm, POSTGRES_DB: litellm}
+    mem_limit: 256m
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    depends_on: [pg]
+    ports: ["4000:4000"]
+    environment:
+      DATABASE_URL: postgresql://litellm:litellm@pg:5432/litellm
+      # The master key is the gateway's root credential — it mints virtual keys
+      # and reads /spend/logs. In the lab it stays server-side; the X-Ray Spend
+      # lens injects it from the proxy, never from the browser.
+      LITELLM_MASTER_KEY: sk-master-smoke
+      STORE_MODEL_IN_DB: "True"
+      # The gateway calls Presidio out-of-process for PII detection/masking.
+      # These point the presidio guardrail at the two sidecar services below.
+      PRESIDIO_ANALYZER_API_BASE: http://analyzer:3000
+      PRESIDIO_ANONYMIZER_API_BASE: http://anonymizer:3000
+    volumes: ["./litellm-config.yaml:/app/config.yaml:ro"]
+    # 2g, not 1g: at 1g LiteLLM is OOMKilled (137) during the prisma DB init
+    # SPIKE at boot. It settles to ~1.23 GiB resident once up — the limit exists
+    # for the boot peak, not the steady state. Boot takes ~60-90 s (prisma).
+    mem_limit: 2g
+    command: ["--port", "4000", "--config", "/app/config.yaml"]
+    # The M8 two-paths lesson, gateway edition. On Rancher Desktop
+    # host.docker.internal resolves to a dead bridge IP; the lab resolves the
+    # working host IP with getent and puts it in the config's api_base. This
+    # host-gateway entry is the standard mapping; the config carries the value.
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+  # Presidio = the PII scanner behind the guardrail. analyzer FINDS entities
+  # (names, emails, phones); anonymizer REWRITES them to <PERSON> etc. Multi-arch
+  # images, so no build. analyzer loads a spaCy model — it is the heavy one
+  # (~738 MiB @ 1.5g); anonymizer is a thin rewriter (~thin, 256m fine).
+  analyzer:
+    image: mcr.microsoft.com/presidio-analyzer:latest
+    mem_limit: 1500m
+  anonymizer:
+    image: mcr.microsoft.com/presidio-anonymizer:latest
+    mem_limit: 256m

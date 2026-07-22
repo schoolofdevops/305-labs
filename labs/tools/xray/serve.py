@@ -25,6 +25,11 @@ K8S = os.environ.get("K8S_PROXY_URL", "http://127.0.0.1:8011").rstrip("/")
 # Traces lens (M10): Phoenix reached through the learner's port-forward
 # (`kubectl port-forward svc/phoenix 16006:6006`).
 PHOENIX = os.environ.get("PHOENIX_URL", "http://127.0.0.1:16006").rstrip("/")
+# Spend lens (M12): the LiteLLM gateway. The master key is injected SERVER-SIDE
+# here — the page never holds a credential (same reason kubectl proxy needs no
+# token in the page). Override for a non-default key/port.
+LITELLM = os.environ.get("LITELLM_URL", "http://127.0.0.1:4000").rstrip("/")
+LITELLM_KEY = os.environ.get("LITELLM_MASTER_KEY", "sk-master-smoke")
 EVALS_DIR = os.environ.get(
     "EVALS_DIR",
     os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -46,13 +51,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         pass
 
     PROXIES = (("/ollama/", "OLLAMA"), ("/llamacpp/", "LLAMACPP"), ("/app/", "APP"),
-               ("/registry/", "REGISTRY"), ("/k8s/", "K8S"), ("/phoenix/", "PHOENIX"))
+               ("/registry/", "REGISTRY"), ("/k8s/", "K8S"), ("/phoenix/", "PHOENIX"),
+               ("/litellm/", "LITELLM"))
 
     def _route(self):
         for prefix, name in self.PROXIES:
             if self.path.startswith(prefix):
                 return prefix, {"OLLAMA": OLLAMA, "LLAMACPP": LLAMACPP, "APP": APP,
-                                "REGISTRY": REGISTRY, "K8S": K8S, "PHOENIX": PHOENIX}[name]
+                                "REGISTRY": REGISTRY, "K8S": K8S, "PHOENIX": PHOENIX,
+                                "LITELLM": LITELLM}[name]
         return None, None
 
     def do_GET(self):
@@ -99,10 +106,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if method == "POST":
             length = int(self.headers.get("Content-Length", 0) or 0)
             body = self.rfile.read(length) if length else None
-        req = urllib.request.Request(
-            url, data=body, method=method,
-            headers={"Content-Type": "application/json"},
-        )
+        headers = {"Content-Type": "application/json"}
+        if prefix == "/litellm/":
+            # Server-side credential injection (Spend lens, M12): the browser
+            # page never sees the master key.
+            headers["Authorization"] = f"Bearer {LITELLM_KEY}"
+        req = urllib.request.Request(url, data=body, method=method, headers=headers)
         try:
             with urllib.request.urlopen(req) as resp:
                 self.send_response(resp.status)

@@ -187,6 +187,28 @@
   .wfBar.retr{background:linear-gradient(90deg,#3ddc97,#2eb47c)} .wfBar.llm{background:linear-gradient(90deg,#f5b942,#e09f1f)}
   #txInput{font-family:var(--mono);font-size:.76rem;color:var(--faint);padding:4px 2px;word-break:break-word;max-height:4.5em;overflow:hidden}
 
+  /* ---------- spend lens (M12) ---------- */
+  body.lens-spend #main,body.lens-spend #bar,body.lens-spend #engMain,body.lens-spend #ragMain,body.lens-spend #evMain,body.lens-spend #trMain,body.lens-spend #arMain,body.lens-spend #k8Main,body.lens-spend #txMain{display:none}
+  #spMain{display:none;flex:1 1 auto;min-height:0;grid-template-columns:clamp(250px,22rem,340px) 1fr;gap:6px}
+  body.lens-spend #spMain{display:grid}
+  #spLeft{display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto;scrollbar-width:thin}
+  #spOffline{display:none;border:1px dashed rgba(245,185,66,.5);border-radius:9px;padding:10px 12px;
+    color:var(--warn);font-size:.9rem;line-height:1.5;background:rgba(245,185,66,.06)}
+  #spOffline.show{display:block}
+  #spOffline code{font-family:var(--mono);font-size:.84rem;color:var(--txt);background:rgba(255,255,255,.06);padding:0 4px;border-radius:4px}
+  .spKeyRow{display:grid;grid-template-columns:1fr auto auto;gap:8px;font-family:var(--mono);font-size:.78rem;
+    padding:6px 8px;border:1px solid var(--line2);border-radius:8px;align-items:center}
+  .spKeyRow .alias{color:var(--txt);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .spKeyRow .amt{color:var(--accent2);font-weight:700}
+  .spKeyRow .toks{color:var(--dim)}
+  #spLog{display:flex;flex-direction:column;gap:4px;min-height:0;overflow-y:auto;scrollbar-width:thin}
+  .spReq{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;font-family:var(--mono);font-size:.75rem;
+    padding:4px 8px;border:1px solid var(--line2);border-radius:7px;align-items:center;color:var(--dim)}
+  .spReq .m{color:var(--txt)} .spReq .sp{color:var(--accent2)}
+  .spReq .hit{font-size:.66rem;font-weight:700;letter-spacing:.5px;border-radius:5px;padding:1px 6px}
+  .spReq .hit.yes{color:#3ddc97;border:1px solid rgba(61,220,151,.5)}
+  .spReq .hit.no{color:var(--faint);border:1px solid var(--line2)}
+
   /* ---------- k8s lens (M8) ---------- */
   body.lens-k8s #main,body.lens-k8s #bar,body.lens-k8s #engMain,body.lens-k8s #ragMain,body.lens-k8s #evMain,body.lens-k8s #trMain,body.lens-k8s #arMain{display:none}
   #k8Main{display:none;flex:1 1 auto;min-height:0;grid-template-columns:1fr clamp(240px,21rem,340px);gap:6px}
@@ -305,7 +327,7 @@
       <button class="tab" data-lens="artifacts">Artifacts</button>
       <button class="tab" data-lens="k8s">K8s</button>
       <button class="tab" data-lens="traces">Traces</button>
-      <button class="tab stub" title="lands with M12">Spend<small>M12</small></button>
+      <button class="tab" data-lens="spend">Spend</button>
     </div>
     <div id="hdrRight">
       <span id="verInfo">ollama —</span>
@@ -425,6 +447,32 @@
       <h2>Waterfall — <span id="txSel" style="text-transform:none;letter-spacing:0">select a trace</span></h2>
       <div id="txInput"></div>
       <div id="txWaterfall"></div>
+    </div>
+  </div>
+
+  <div id="spMain">
+    <div id="spLeft">
+      <div id="spOffline">
+        Gateway unreachable. Start the M12 stack —
+        <code>docker compose -f labs/opsmate/gateway/compose.yaml -p gateway up -d</code>
+        — then send a request through it. The proxy injects the master key server-side;
+        this page never holds a credential.
+      </div>
+      <div class="card">
+        <div class="cardTitle">totals</div>
+        <div class="row"><span class="lbl">total spend</span><span><span class="val hot" id="spTotal">—</span></span></div>
+        <div class="row"><span class="lbl">requests</span><span><span class="val" id="spReqs">—</span></span></div>
+        <div class="row"><span class="lbl">cache hits</span><span><span class="val" id="spHits">—</span></span></div>
+        <div class="row"><span class="lbl">total tokens</span><span><span class="val" id="spToks">—</span></span></div>
+      </div>
+      <div class="card">
+        <div class="cardTitle">spend by key</div>
+        <div id="spKeys" style="display:flex;flex-direction:column;gap:4px"></div>
+      </div>
+    </div>
+    <div class="card" style="display:flex;flex-direction:column;min-height:0">
+      <div class="cardTitle">recent requests (newest first)</div>
+      <div id="spLog"></div>
     </div>
   </div>
 
@@ -767,7 +815,7 @@
 
   /* ---------- presets: the two contrasting experiments from the lab ---------- */
   /* ---------- lens switching (M3+) ---------- */
-  const LENS_NAMES = { tokens: 'Tokens lens', engine: 'Engine lens', rag: 'RAG lens', evals: 'Evals lens', train: 'Train lens', artifacts: 'Artifacts lens', k8s: 'K8s lens', traces: 'Traces lens' };
+  const LENS_NAMES = { tokens: 'Tokens lens', engine: 'Engine lens', rag: 'RAG lens', evals: 'Evals lens', train: 'Train lens', artifacts: 'Artifacts lens', k8s: 'K8s lens', traces: 'Traces lens', spend: 'Spend lens' };
   document.querySelectorAll('#tabs .tab[data-lens]').forEach(t => t.addEventListener('click', () => {
     document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
@@ -779,7 +827,58 @@
     if (lens === 'artifacts') loadArtifacts();
     if (lens === 'k8s') k8Poll();
     if (lens === 'traces') loadTraces();
+    if (lens === 'spend') spPoll();
   }));
+
+  /* ---------- Spend lens (M12): LiteLLM /spend/logs through the proxy ---------- */
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let spTimer = null;
+  async function spPoll() {
+    clearTimeout(spTimer);
+    if (!document.body.className.includes('lens-spend')) return;
+    try {
+      const r = await fetch('/litellm/spend/logs');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const rows = await r.json();
+      $("spOffline").classList.remove('show');
+      renderSpend(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      $("spOffline").classList.add('show');
+    }
+    spTimer = setTimeout(spPoll, 5000);  // poll, not stream — one connection-budget slot
+  }
+  function renderSpend(rows) {
+    // Aggregate per hashed key; newest requests first. Spend of 0.0 with real
+    // token counts is the $0-cost lesson — self-hosted models are "free" until
+    // you price them, so the budget gate never fires.
+    const byKey = {};
+    let total = 0, hits = 0, toks = 0;
+    rows.forEach(r => {
+      const k = r.api_key ? String(r.api_key).slice(-8) : '(master)';
+      const b = byKey[k] || (byKey[k] = { spend: 0, toks: 0, n: 0 });
+      const sp = Number(r.spend || 0), tk = Number(r.total_tokens || 0);
+      b.spend += sp; b.toks += tk; b.n += 1;
+      total += sp; toks += tk;
+      if (String(r.cache_hit) === 'True' || r.cache_hit === true) hits += 1;
+    });
+    $("spTotal").textContent = '$' + total.toFixed(6);
+    $("spReqs").textContent = String(rows.length);
+    $("spHits").textContent = rows.length ? `${hits} (${Math.round(100 * hits / rows.length)}%)` : '0';
+    $("spToks").textContent = String(toks);
+    $("spKeys").innerHTML = Object.entries(byKey)
+      .sort((a, b) => b[1].spend - a[1].spend || b[1].n - a[1].n)
+      .map(([k, v]) => `<div class="spKeyRow"><span class="alias">…${esc(k)}</span>` +
+        `<span class="amt">$${v.spend.toFixed(6)}</span><span class="toks">${v.toks} tok · ${v.n} req</span></div>`)
+      .join('');
+    const recent = rows.slice().sort((a, b) => String(b.startTime).localeCompare(String(a.startTime))).slice(0, 40);
+    $("spLog").innerHTML = recent.map(r => {
+      const hit = String(r.cache_hit) === 'True' || r.cache_hit === true;
+      const t = String(r.startTime || '').replace('T', ' ').slice(5, 19);
+      return `<div class="spReq"><span>${esc(t)}</span><span class="m">${esc(r.model || '?')}</span>` +
+        `<span>${Number(r.total_tokens || 0)} tok</span><span class="sp">$${Number(r.spend || 0).toFixed(6)}</span>` +
+        `<span class="hit ${hit ? 'yes' : 'no'}">${hit ? 'CACHE' : 'MISS'}</span></div>`;
+    }).join('');
+  }
 
   /* ---------- Traces lens (M10): Phoenix GraphQL through the proxy ---------- */
   function phxAttr(attrs, dotted) {

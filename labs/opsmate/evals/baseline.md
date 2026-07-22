@@ -119,3 +119,26 @@ baseline did its job as a yardstick and refused a model that would have regresse
 quality. **The gate works.** M12 automates exactly this comparison as a CI promotion
 gate. Tuned eval artifacts: `generation-tuned-latest.json` (RAG),
 `generation-tuned-norag.json` (no-RAG).
+
+---
+
+## M12 addendum — the gate floor (2026-07-22)
+
+The CI gate (`labs/m12/eval-gate/gate.sh`) scores the generation golden set
+**deterministically** (the `contains_any` nets, no judge) against the assistant's `/ask`,
+with retrieval in the path. Measured on the validated M12 run:
+
+| Arm | Deterministic generation score |
+|---|---|
+| RAG (`/ask`, retrieval in path) | **11 / 12** |
+| no-RAG control (retrieval stripped) | **6 / 12** |
+
+**Committed gate floor: `>= 8 / 12`.** The floor sits between the two arms, so the gate
+enforces exactly the +RAG value this file measured: strip retrieval (broken ingest, empty
+index) and the score collapses below the floor → BLOCK (exit 1).
+
+**Why the judge is not in the gate:** judge-scored runs measured **4–5 / 15 on a healthy
+model** against this file's 6/15 reference — non-reproducible run to run. The judge is
+demoted to **advisor** (it still flags gross failures); gates key on the deterministic
+layer. The v2 prompt illustrates the boundary: deterministically it scores 9/12 (no floor
+tripped) while the judge saw 6→5 — a judge-only signal is not a gating signal.

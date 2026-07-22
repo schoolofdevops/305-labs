@@ -1,0 +1,87 @@
+# ============================================================================
+# OpsMate eval-gate step (Argo Workflows) — M12.
+#
+# This is the brake test wired INTO the M11 promotion pipeline. In M11 promotion
+# was a pull request that bumps the ModelKit tag; this step makes that promotion
+# have to EARN the tag bump by passing the golden set first. The step runs
+# gate.sh against the assistant's /ask and keys the pipeline on its EXIT CODE:
+#   exit 0 → deterministic pass count holds the baseline.md floor → promotion may proceed.
+#   exit 1 → below the floor → the step fails → the pipeline stops.
+#
+# It extends the M11 workflow the same way a real CD pipeline would: an eval
+# gate as a step whose success is a precondition for the promote step. On the
+# 8 GB path you run this as a LOCAL dry-run (the command below is exactly what a
+# CI runner executes); a full in-cluster replay with the gateway deployed inside
+# the cluster is the 16 GB / cluster path (Deep Dive note).
+#
+# Submit (dry-run, gateway reachable from where the step runs):
+#   kubectl create -f labs/m12/eval-gate/gate.yaml
+# ============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: opsmate-eval-gate-
+  labels:
+    app: opsmate-eval-gate
+spec:
+  entrypoint: promote-with-gate
+  serviceAccountName: argo-workflow    # same executor SA as the M11 train workflow
+  arguments:
+    parameters:
+      - name: candidate-tag
+        value: "1.0.0-candidate"       # the tag M11's PR is trying to promote
+      - name: app-url
+        value: "http://host.docker.internal:8001"   # the OpsMate ASSISTANT (/ask) — gate what you ship
+      - name: floor
+        value: "8"                     # committed baseline floor (labs/opsmate/evals/baseline.md)
+  templates:
+    # The pipeline: run the gate; ONLY on success, promote. This is the whole
+    # point — the promote step has the gate as a precondition, so a red eval
+    # blocks the tag bump the same way a failed unit test blocks a merge.
+    - name: promote-with-gate
+      steps:
+        - - name: eval-gate
+            template: run-eval-gate
+        - - name: promote
+            template: promote-candidate
+            when: "{{steps.eval-gate.outputs.result}} == PASS"
+
+    # The brake test — gate.sh, NOT raw promptfoo. Raw `promptfoo eval` exits 100
+    # on ANY failed assert, so a healthy model (never 15/15 on a wide judge-graded
+    # set) would be permanently "red". gate.sh thresholds on the deterministic
+    # generation pass-count vs the committed baseline FLOOR: exit 0 (>= floor) or
+    # exit 1 (< floor). set -e turns a below-floor exit 1 into a failed step, so
+    # the `when` on the promote step is false and promotion is blocked.
+    - name: run-eval-gate
+      container:
+        image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            set -e
+            # gate.sh evals the ASSISTANT (/ask, retrieval in the path), not the
+            # bare gateway — you gate what you ship. FLOOR is the baseline yardstick.
+            APP_URL="{{workflow.parameters.app-url}}" FLOOR="{{workflow.parameters.floor}}" \
+              bash /work/gate.sh
+            # gate.sh already exited non-zero below the floor (set -e stops us).
+            echo "PASS"
+        env:
+          - name: APP_URL
+            value: "{{workflow.parameters.app-url}}"
+      outputs:
+        # The last line of stdout ("PASS") becomes the step result the pipeline
+        # gates on. If gate.sh scored below the floor, the step already failed.
+        parameters:
+          - name: result
+            valueFrom:
+              default: "FAIL"
+
+    # Stand-in for the M11 promote action (the PR/tag bump). Only reached when
+    # the gate passed. In the real pipeline this is the step that merges the tag
+    # bump / annotates Argo CD to sync the candidate.
+    - name: promote-candidate
+      container:
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args:
+          - 'echo "eval gate GREEN — promoting {{workflow.parameters.candidate-tag}}"'

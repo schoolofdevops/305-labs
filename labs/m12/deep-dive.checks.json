@@ -1,0 +1,49 @@
+{
+  "checks": [
+    {
+      "id": "deep-dive-cost-accounting-path",
+      "describe": "the Deep Dive traces the four-stage cost-accounting path (token count incl. hidden reasoning → price → per-key spend row → budget check on the NEXT request) and names the $0-cost mechanism (price defaults to zero for self-hosted)",
+      "run": "F=site/docs/m12-gateway-trust/deep-dive.md; if grep -q 'cost-accounting path' \"$F\" && grep -qi 'hidden reasoning' \"$F\" && grep -q 'spend row' \"$F\" && grep -qi 'next request' \"$F\" && grep -q 'defaults to zero' \"$F\"; then echo cost-path-ok; else echo cost-path-incomplete; fi",
+      "assert": {
+        "contains": "cost-path-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "deep-dive-guardrail-hook-ordering",
+      "describe": "the Deep Dive explains guardrail hook ordering (pre_call vs during vs post) and why prompt_injection_params without the detect_prompt_injection callback is inert — registration vs configuration",
+      "run": "F=site/docs/m12-gateway-trust/deep-dive.md; if grep -q 'pre_call' \"$F\" && grep -q 'post_call' \"$F\" && grep -q 'prompt_injection_params' \"$F\" && grep -qi 'registers the hook' \"$F\" && grep -qi 'silent no-op' \"$F\"; then echo hook-ordering-ok; else echo hook-ordering-incomplete; fi",
+      "assert": {
+        "contains": "hook-ordering-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "deep-dive-gate-wiring-both-forms",
+      "describe": "the Deep Dive documents the eval-gate wiring in both forms (promptfoo exit code → GitHub Actions required check AND Argo step when-condition, extending M11's pipeline) and the 16 GB / in-cluster delta",
+      "run": "F=site/docs/m12-gateway-trust/deep-dive.md; if grep -qi 'exit code' \"$F\" && grep -q 'GitHub Actions' \"$F\" && grep -q 'Argo' \"$F\" && grep -q 'when:' \"$F\" && grep -q '16 GB' \"$F\"; then echo gate-wiring-doc-ok; else echo gate-wiring-doc-incomplete; fi",
+      "assert": {
+        "contains": "gate-wiring-doc-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "deep-dive-mermaid-present",
+      "describe": "the Deep Dive carries at least one Mermaid diagram (the cost-accounting path, the hook-ordering lifecycle, or the gate-wiring flow) per the diagram-required convention",
+      "run": "F=site/docs/m12-gateway-trust/deep-dive.md; if grep -q '```mermaid' \"$F\"; then echo deepdive-mermaid-ok; else echo deepdive-mermaid-missing; fi",
+      "assert": {
+        "contains": "deepdive-mermaid-ok"
+      },
+      "weight": 1
+    },
+    {
+      "id": "deep-dive-ragas-surveyed-not-installed",
+      "describe": "the Deep Dive surveys ragas (industrial RAG metrics) as a concept rather than requiring it on the 8 GB path — the judge stays the M5 two-layer pattern, honestly scoped",
+      "run": "F=site/docs/m12-gateway-trust/lab.md; G=site/docs/m12-gateway-trust/deep-dive.md; if grep -qi 'ragas' \"$F\" || grep -qi 'ragas' \"$G\"; then echo ragas-surveyed-ok; else echo ragas-note-missing; fi",
+      "assert": {
+        "contains": "ragas-surveyed-ok"
+      },
+      "weight": 1
+    }
+  ]
+}

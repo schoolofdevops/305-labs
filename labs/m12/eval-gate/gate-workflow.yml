@@ -1,0 +1,72 @@
+# ============================================================================
+# OpsMate eval gate — GitHub Actions, M12.
+#
+# This is the M5 ci-preview.yml stub grown into a REAL gate. It runs on the pull
+# request that promotes the model (the M11 tag bump), stands the gateway up,
+# runs the golden set through it, and BLOCKS THE MERGE on a failing eval — the
+# brake test the depot does before the truck leaves.
+#
+# It lives in the learner's own env repo under .github/workflows/. It is authored
+# and syntax-real here; on the 8 GB path you dry-run the same promptfoo command
+# locally against the running assistant and read the exit code (the lab does this).
+# The gate keys on gate.sh's exit code: non-zero (below the committed baseline.md
+# floor) fails the job and blocks the merge; 0 lets it through.
+# ============================================================================
+name: opsmate-eval-gate
+on:
+  pull_request:
+    # Only gate promotions — PRs that touch the model version manifest.
+    paths:
+      - "manifests/model-server.yaml"
+
+jobs:
+  eval-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bring up the gateway (governs external traffic) and the OpsMate app (the assistant)
+        # The gate evals the ASSISTANT — the app, with retrieval in the path — not
+        # the bare gateway. Both come up: the gateway fronts production traffic; the
+        # app is what the gate scores. The app's chat points at the model backend
+        # (host Ollama / vLLM), NOT through the gateway's PII mask (see the report
+        # step for why routing eval traffic through the mask corrupts it).
+        run: |
+          docker compose -f labs/opsmate/gateway/compose.yaml up -d
+          docker compose -f labs/opsmate/compose.yaml up -d --no-deps app
+          until curl -fsS http://localhost:8001/health >/dev/null 2>&1; do sleep 3; done
+
+      - name: (Report only) Run the golden set THROUGH the guarded gateway — the mask-corruption exhibit
+        # This is deliberately NOT the gate. It runs the golden set through the
+        # gateway with a virtual key so the uploaded report shows the PII mask
+        # mangling eval content (<PERSON>/<DATE_TIME>) — the evidence for WHY the
+        # real gate below hits the app directly. It never blocks the merge.
+        continue-on-error: true
+        run: |
+          KEY=$(curl -s -X POST http://localhost:4000/key/generate \
+            -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+            -H 'Content-Type: application/json' \
+            -d '{"key_alias":"eval-runner","max_budget":1}' | jq -r '.key')
+          uv run labs/m5/make_promptfoo_tests.py
+          GATEWAY_URL=http://localhost:4000 GATEWAY_KEY="$KEY" \
+            npx -y promptfoo@latest eval \
+              -c labs/m12/eval-gate/promptfooconfig.gate.yaml \
+              -o labs/m12/eval-gate/gate-latest.json \
+              --max-concurrency 2 --no-cache
+        env:
+          LITELLM_MASTER_KEY: sk-master-smoke
+
+      - name: Eval GATE — gate.sh vs the assistant (blocks merge below the baseline floor)
+        # gate.sh scores the generation golden set deterministically against the
+        # assistant's /ask (retrieval in the path) and exits non-zero below the
+        # committed FLOOR — which fails this step and the required check, blocking
+        # the merge. A healthy assistant clears the floor; a regression (broken
+        # ingest, un-grounded deploy) collapses below it and is blocked.
+        run: APP_URL=http://localhost:8001 FLOOR=8 bash labs/m12/eval-gate/gate.sh
+
+      - name: Publish the gateway exhibit report
+        if: always()          # upload even when the gate fails
+        uses: actions/upload-artifact@v4
+        with:
+          name: opsmate-eval-report
+          path: labs/m12/eval-gate/gate-latest.json

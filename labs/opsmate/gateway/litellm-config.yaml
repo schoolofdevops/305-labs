@@ -1,0 +1,77 @@
+# ============================================================================
+# OpsMate gateway routing + policy (M12). This file is the gateway's rulebook:
+# which backend models exist, how requests are priced, and which house rules
+# (cache, fallback, guardrails) apply to everything coming through the door.
+#
+# Backend is host Ollama, reached at the M8 getent value (192.168.5.2 on the
+# spike host — YOURS WILL DIFFER; the lab resolves it and rewrites this line).
+# ============================================================================
+model_list:
+  # The primary route clients ask for by the public name "opsmate". The pricing
+  # lines below are the fix for the $0-cost lie: a self-hosted model is FREE by
+  # default, so spend stays 0.0 and budget gates NEVER fire. You price your own
+  # infra — per-token amounts that make the budget math real — so a runaway key
+  # actually trips. These are illustrative rates, not a vendor bill.
+  - model_name: opsmate
+    litellm_params:
+      model: ollama/qwen3:0.6b
+      api_base: http://192.168.5.2:11434
+      input_cost_per_token: 0.000001
+      output_cost_per_token: 0.000002
+
+  # The substitute the gateway falls back to when the primary route is down.
+  # A different, slightly larger model — the response's `model` field will name
+  # it, which is the honest tell that a fallback happened.
+  - model_name: opsmate-fallback
+    litellm_params:
+      model: ollama/qwen25-1.5b-16k
+      api_base: http://192.168.5.2:11434
+
+  # A deliberately DEAD route (port 19999, nothing listening) used to prove
+  # fallback live. Requests here fail to connect and get routed to the fallback.
+  - model_name: opsmate-dead
+    litellm_params:
+      model: ollama/qwen3:0.6b
+      api_base: http://host.docker.internal:19999
+
+litellm_settings:
+  # Injection heuristics. detect_prompt_injection is the CALLBACK that actually
+  # runs the check — this line is load-bearing. prompt_injection_params WITHOUT
+  # this callback is a silent no-op (a designed exhibit in the lab): the config
+  # looks armed but nothing inspects the request. reject_as_response: false means
+  # a detected attack is REJECTED (raises), not returned as a canned reply.
+  callbacks: ["detect_prompt_injection"]
+  prompt_injection_params:
+    heuristics_check: true
+    reject_as_response: false
+
+  # Exact-match cache: an identical request returns the SAME response id in
+  # ~0.08 s (vs. ~4 s cold) and lands in /spend/logs as cache_hit. `local` keeps
+  # it in-process — no Redis on the 8 GB path. Semantic caching (embedding
+  # similarity, M4's vectors reused) is the concept; exact-match is what runs here.
+  cache: true
+  cache_params:
+    type: local
+
+  # When opsmate-dead fails to connect, retry the request against
+  # opsmate-fallback. The map is {broken-route: [substitute, ...]}.
+  fallbacks:
+    - opsmate-dead: ["opsmate-fallback"]
+
+guardrails:
+  # Presidio PII masking, pre_call: the request is scanned and rewritten BEFORE
+  # it reaches the model, so the backend never sees the raw name/email/phone.
+  # pre_call is the ordering that matters — mask on the way in, not after the
+  # model has already read the secret. (Two honest error modes surface in the
+  # lab: a .example-TLD email slips through, and a ticket number over-redacts to
+  # <DATE_TIME> — guardrails are classifiers with errors in both directions.)
+  - guardrail_name: presidio-pii
+    litellm_params:
+      guardrail: presidio
+      mode: pre_call
+      # default_on is load-bearing: without it a registered guardrail only runs
+      # when a request explicitly names it, so masking would silently NOT apply to
+      # ordinary traffic (a config that looks armed and inspects nothing — the same
+      # class of trap as prompt_injection_params without its callback). true makes
+      # the mask apply to EVERY request through the door, which is the whole point.
+      default_on: true

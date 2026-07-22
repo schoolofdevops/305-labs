@@ -1,0 +1,69 @@
+# ============================================================================
+# OpsMate eval THROUGH THE GATEWAY — the "what NOT to do" exhibit, M12.
+#
+# This config runs the M5 generation golden set against the GATEWAY's chat
+# endpoint (virtual-key auth, guardrails in the path). It exists to make ONE
+# thing visible: what happens when you route eval traffic through the same
+# governed door as production. Two problems surface, and both are the lesson:
+#
+#   1. NO RETRIEVAL. The gateway serves the bare model — there is no RAG app to
+#      retrieve the runbook, so the model answers ungrounded and scores like the
+#      M5 no-RAG control (a handful of 15). You are not evaluating the assistant
+#      you ship; you are evaluating a headless model.
+#   2. THE PII MASK CORRUPTS THE EVAL. The pre_call Presidio guardrail over-fires
+#      on eval content — "Kafka" becomes <PERSON>, a restore-drill window becomes
+#      <DATE_TIME> — so answers are mangled before the grader ever reads them.
+#
+# The takeaway the lab draws from running this: eval traffic is INTERNAL. Do not
+# put the production PII mask between your eval runner and your assistant. The
+# real promotion gate (labs/m12/eval-gate/gate.sh) evals the ASSISTANT at /ask
+# (retrieval in the path, no mask) and thresholds deterministically — see gate.sh.
+#
+# Run (from the labs repo root), against a running gateway with a virtual key,
+# to REPRODUCE THE CORRUPTION (read the mangled answers in the JSON output):
+#   GATEWAY_URL=http://localhost:4000 GATEWAY_KEY=sk-... \
+#   npx -y promptfoo@latest eval -c labs/m12/eval-gate/promptfooconfig.gate.yaml \
+#       -o labs/m12/eval-gate/gate-latest.json --no-cache
+#
+# Regenerate the tests from the golden set first (single source of truth):
+#   uv run labs/m5/make_promptfoo_tests.py
+# ============================================================================
+
+description: "OpsMate eval THROUGH the guarded gateway — the mask-corrupts-eval exhibit (not the gate)"
+
+# The app IS the prompt (M5): OpsMate builds the RAG prompt server-side. Here we
+# talk to the gateway's OpenAI-compatible chat endpoint, so the question rides in
+# as a chat message and we grade the returned answer.
+prompts:
+  - "{{query}}"
+
+providers:
+  # The gateway, exactly as a production client reaches it: OpenAI-compatible
+  # /v1, bearer-authed with a VIRTUAL KEY (never the master key). Point this at
+  # the running gateway; the key is a limited-budget eval-runner key you mint in
+  # the lab. Running the eval HERE is exactly the mistake the exhibit exposes —
+  # the eval traffic is subject to the same guardrails as real traffic, and the
+  # PII mask corrupts it.
+  - id: "openai:chat:opsmate"
+    config:
+      apiBaseUrl: "{{ env.GATEWAY_URL | default('http://localhost:4000') }}/v1"
+      apiKey: "{{ env.GATEWAY_KEY | default('sk-eval-runner') }}"
+
+# The local judge for llm-rubric assertions — the M5 two-layer pattern. A 0.6B
+# judge (qwen3:0.6b) is a smoke detector, not an examiner: it catches gross misses
+# and is noisy on the margin. The real gate (gate.sh) deliberately does NOT use a
+# judge — a promotion brake must be stable, so it thresholds on the deterministic
+# contains-any nets instead. The judge stays here because this config is a report,
+# not the gate. No cloud key: ollama on the host.
+defaultTest:
+  options:
+    provider:
+      id: "ollama:chat:qwen3:0.6b"
+      config:
+        temperature: 0
+        think: false
+
+# The full generated golden set (single source of truth). Run it through the
+# gateway and read the mangled outputs — that is the exhibit. Do not gate on this;
+# gate on gate.sh (the assistant at /ask, deterministic threshold).
+tests: file://../../opsmate/evals/generation-tests.yaml

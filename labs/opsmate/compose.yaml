@@ -85,10 +85,13 @@ services:
       # Colima, plain Docker Engine), export OLLAMA_URL to the address the
       # container actually reaches the host on — see the lab Troubleshooting.
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
-      # generation through the compose model service (service name on the network)
-      MODEL_URL: http://model:8080
+      # generation through the compose model service (service name on the network).
+      # M12 overrides these to route the app's chat through the GATEWAY instead
+      # (MODEL_URL=http://<host-ip>:4000, CHAT_MODEL=opsmate) — "gate what you ship":
+      # the assistant behind the governed door. Defaults keep M1–M11 unchanged.
+      MODEL_URL: ${MODEL_URL:-http://model:8080}
       EMBED_MODEL: nomic-embed-text
-      CHAT_MODEL: qwen3-0.6b
+      CHAT_MODEL: ${CHAT_MODEL:-qwen3-0.6b}
       CORPUS_DIR: /corpus
       CHROMA_DIR: /data/chroma
       # M5: the system prompt is config, not code. Point the app at the mounted

@@ -1,0 +1,94 @@
+{
+  "checks": [
+    {
+      "id": "gateway-compose-mem-limits-and-services",
+      "describe": "gateway/compose.yaml stands up the four-service front-door stack sized for the 8 GB path: litellm (mem_limit 2g — the boot-OOM fix), pg (the virtual-key datastore), and presidio analyzer + anonymizer (the PII scanner), with taught comments (Lab Step 1)",
+      "run": "F=labs/opsmate/gateway/compose.yaml; if grep -q 'image: ghcr.io/berriai/litellm:main-stable' \"$F\" && grep -q 'mem_limit: 2g' \"$F\" && grep -q 'image: postgres:16-alpine' \"$F\" && grep -q 'presidio-analyzer' \"$F\" && grep -q 'presidio-anonymizer' \"$F\" && grep -q 'STORE_MODEL_IN_DB' \"$F\"; then echo gateway-stack-ok; else echo gateway-stack-wrong; fi",
+      "assert": {
+        "contains": "gateway-stack-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "gateway-config-priced-fallback-cache-guardrails",
+      "describe": "litellm-config.yaml carries every policy the lab teaches: priced primary model (input/output_cost_per_token — the $0-cost fix), a fallback map, local cache, the injection callback (detect_prompt_injection), and the pre_call presidio guardrail (Lab Steps 4-8)",
+      "run": "F=labs/opsmate/gateway/litellm-config.yaml; if grep -q 'input_cost_per_token' \"$F\" && grep -q 'output_cost_per_token' \"$F\" && grep -q 'fallbacks:' \"$F\" && grep -q 'opsmate-fallback' \"$F\" && grep -q 'type: local' \"$F\" && grep -q 'detect_prompt_injection' \"$F\" && grep -q 'guardrail: presidio' \"$F\" && grep -q 'mode: pre_call' \"$F\"; then echo gateway-policy-ok; else echo gateway-policy-wrong; fi",
+      "assert": {
+        "contains": "gateway-policy-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "gateway-config-yaml-parses",
+      "describe": "both gateway config files are valid YAML after the taught-comment refinement — the spike's ScannerError gotcha (a half-written config on restart) is what this guards against (Lab Steps 1-2)",
+      "run": "python3 -c \"import yaml; yaml.safe_load(open('labs/opsmate/gateway/compose.yaml')); yaml.safe_load(open('labs/opsmate/gateway/litellm-config.yaml')); print('gateway-yaml-valid')\" 2>/dev/null || echo gateway-yaml-invalid",
+      "assert": {
+        "contains": "gateway-yaml-valid"
+      },
+      "weight": 2
+    },
+    {
+      "id": "redteam-script-runs-m4-replay",
+      "describe": "red-team.sh runs the scripted attack set through the guarded gateway path and includes the M4 corpus indirect-injection replay (the exact deploy-rollback.md ROLLBACK payload) plus a direct injection and a PII probe (Lab Step 9)",
+      "run": "F=labs/m12/red-team.sh; if bash -n \"$F\" 2>/dev/null && grep -q 'ROLLBACK' \"$F\" && grep -qi 'indirect' \"$F\" && grep -q '/v1/chat/completions' \"$F\" && grep -qi 'THROUGH' \"$F\"; then echo redteam-ok; else echo redteam-wrong; fi",
+      "assert": {
+        "contains": "redteam-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "gateway-eval-exhibit-config-through-the-door",
+      "describe": "the through-the-gateway promptfoo config (promptfooconfig.gate.yaml) runs the golden set through the GATEWAY /v1 with virtual-key auth (GATEWAY_URL/GATEWAY_KEY, generation-tests.yaml, local qwen3:0.6b judge) — the mask-corrupts-eval EXHIBIT that motivates gating the app instead (Lab Step 10)",
+      "run": "F=labs/m12/eval-gate/promptfooconfig.gate.yaml; if python3 -c \"import yaml; yaml.safe_load(open('$F'))\" 2>/dev/null && grep -q 'GATEWAY_URL' \"$F\" && grep -q 'GATEWAY_KEY' \"$F\" && grep -q '/v1' \"$F\" && grep -q 'generation-tests.yaml' \"$F\" && grep -q 'qwen3:0.6b' \"$F\"; then echo gate-config-ok; else echo gate-config-wrong; fi",
+      "assert": {
+        "contains": "gate-config-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "eval-gate-thresholds-the-assistant-on-a-baseline-floor",
+      "describe": "the real promotion gate (gate.sh) evals the ASSISTANT at /ask (retrieval in the path — gate what you ship), scores the generation golden set deterministically (contains_any nets), and thresholds on a committed baseline FLOOR — exit 0 at/above the floor, exit 1 below it (not raw promptfoo, which is red on any single miss). It also supports TARGET=norag to prove the gate bites (Lab Step 10)",
+      "run": "F=labs/m12/eval-gate/gate.sh; if bash -n \"$F\" 2>/dev/null && grep -q '/ask' \"$F\" && grep -qi 'contains_any' \"$F\" && grep -q 'FLOOR' \"$F\" && grep -q 'exit 0' \"$F\" && grep -q 'exit 1' \"$F\" && grep -q 'norag' \"$F\" && grep -q 'baseline.md' \"$F\"; then echo gate-sh-ok; else echo gate-sh-wrong; fi",
+      "assert": {
+        "contains": "gate-sh-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "eval-gate-argo-and-actions-authored",
+      "describe": "both gate-wiring forms are authored and syntax-real and call gate.sh: the Argo step (gate.yaml — a Workflow whose promote step runs only when the eval-gate step passed) and the GitHub Actions workflow (gate-workflow.yml — gates the promotion PR on gate.sh's exit code) (Lab Step 10 / Deep Dive)",
+      "run": "A=labs/m12/eval-gate/gate.yaml; G=labs/m12/eval-gate/gate-workflow.yml; if python3 -c \"import yaml; list(yaml.safe_load_all(open('$A'))); list(yaml.safe_load_all(open('$G')))\" 2>/dev/null && grep -q 'kind: Workflow' \"$A\" && grep -q 'when:' \"$A\" && grep -q 'gate.sh' \"$A\" && grep -q 'pull_request' \"$G\" && grep -q 'gate.sh' \"$G\"; then echo gate-wiring-ok; else echo gate-wiring-wrong; fi",
+      "assert": {
+        "contains": "gate-wiring-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "golden-set-is-the-source-of-truth",
+      "describe": "the gate reuses the M5 golden set (the single source of truth industrialized here) — golden.yaml still carries the two graded layers plus the honesty layer the gate measures against (Lesson / Lab Step 10)",
+      "run": "F=labs/opsmate/evals/golden.yaml; if grep -q 'layer: retrieval' \"$F\" && grep -q 'layer: generation' \"$F\" && grep -q 'layer: honesty' \"$F\" && grep -q 'must_refuse' \"$F\"; then echo golden-layers-ok; else echo golden-layers-wrong; fi",
+      "assert": {
+        "contains": "golden-layers-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "lab-teaches-the-full-trust-arc",
+      "describe": "the lab teaches the complete trust arc: virtual keys + the $0-cost lie, budget trip, cache hit, fallback, both PII error modes, the injection block + silent no-op exhibit, the M4 red-team replay, the exit-code eval gate, and the Spend lens (Lab Steps 3-11)",
+      "run": "F=site/docs/m12-gateway-trust/lab.md; if grep -q '0-cost lie' \"$F\" && grep -q 'Budget has been exceeded' \"$F\" && grep -q 'cache' \"$F\" && grep -q 'fallback' \"$F\" && grep -q 'DATE_TIME' \"$F\" && grep -q 'silent' \"$F\" && grep -q 'red-team' \"$F\" && grep -q 'exit code' \"$F\" && grep -q 'spend/logs' \"$F\"; then echo trust-arc-taught; else echo trust-arc-incomplete; fi",
+      "assert": {
+        "contains": "trust-arc-taught"
+      },
+      "weight": 2
+    },
+    {
+      "id": "lab-folds-real-output-no-html-comments",
+      "describe": "after live validation the lab has real Expected-output folded in (fenced ```text blocks) and carries no HTML comments (which break the MDX build) and no leftover CAPTURE placeholders (course convention: fold real output, then remove the markers)",
+      "run": "F=site/docs/m12-gateway-trust/lab.md; if grep -q '```text' \"$F\" && ! grep -q '<!--' \"$F\" && ! grep -q 'CAPTURE' \"$F\"; then echo lab-folded-ok; else echo lab-folded-wrong; fi",
+      "assert": {
+        "contains": "lab-folded-ok"
+      },
+      "weight": 1
+    }
+  ]
+}
