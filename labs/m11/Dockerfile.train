@@ -1,0 +1,51 @@
+# =============================================================================
+# opsmate-train:m11 — the OpsMate fine-tune, containerized for an in-cluster run.
+#
+# WHY a prebuilt image (the spike's Wall 1). The first spike attempt installed
+# torch/transformers/peft AT POD START (python:3.11-slim + pip install ...). On
+# the CPU node that took ~14 minutes EVERY run — the deps download dominates the
+# job. The fix is to bake the environment once: build this image, `kind load` it
+# into the node, and run the training pod with imagePullPolicy: Never. The pod
+# then starts in seconds and spends its time training, not resolving pip.
+#
+# This is the same reproducible-environment argument as M6's Dockerfile.train,
+# now load-bearing: the training step is a pipeline stage (M11), and a pipeline
+# stage must not re-resolve dependencies on every run.
+#
+# The base MODEL is NOT baked in (it is 1.4 GB and version-controlled elsewhere).
+# It arrives at run time from the node's /models mount (kind extraMount) — see
+# train-workflow.yaml. Only the trainer code + a tiny smoke dataset live here.
+#
+# Build + load (from the labs repo root):
+#   docker build -f labs/m11/Dockerfile.train -t opsmate-train:m11 labs/m11
+#   kind load docker-image opsmate-train:m11 --name opsmate
+# =============================================================================
+FROM python:3.12-slim
+
+# CPU torch — pinned, so the training environment is byte-identical run to run.
+# On a GPU node you would swap the base for an nvidia/cuda image and the cuda
+# torch wheel. These pins match M6's Dockerfile.train so a host run and a
+# cluster run produce comparable results.
+RUN pip install --no-cache-dir \
+      "torch==2.4.1" \
+      "transformers>=4.51,<4.55" \
+      "peft==0.13.2" \
+      "accelerate==1.3.0" \
+      "datasets==3.0.1" \
+      "jinja2"
+
+WORKDIR /work
+
+# The trainer is the SAME script M6 authored — one training contract across the
+# course. It already supports the smoke flags the workflow passes
+# (--batch 1 --max-len 256 --max-steps 2). Copied in, not re-written.
+COPY train_lora.py /work/train_lora.py
+
+# A tiny smoke dataset baked in so the in-cluster job is self-contained: the
+# workflow does not have to mount training data, only the base model. For a real
+# pipeline this would be pulled from a versioned data artifact (an M7-style kit);
+# here 8 chat samples are enough to prove 2 training steps run and loss moves.
+COPY smoke-train.jsonl /work/smoke-train.jsonl
+
+# One job: run the trainer. The workflow passes flags at run time.
+ENTRYPOINT ["python", "/work/train_lora.py"]

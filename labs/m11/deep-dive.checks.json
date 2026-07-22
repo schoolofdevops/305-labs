@@ -1,0 +1,58 @@
+{
+  "checks": [
+    {
+      "id": "training-pod-cpu-capped",
+      "describe": "the training workflow carries the CPU limit that is the control-plane protection from the starvation post-mortem, plus the 8 GB smoke profile flags — an uncapped pod is what starved the apiserver (Deep Dive: the starvation post-mortem). Read from the workflow manifest the lab applies",
+      "run": "F=labs/m11/train-workflow.yaml; if grep -Eq 'cpu: *\"?2\"?' \"$F\" && grep -q 'limits' \"$F\" && grep -q -- '--batch' \"$F\" && grep -q '256' \"$F\" && grep -q -- '--max-steps' \"$F\"; then echo cpu-capped-smoke; else echo cap-or-smoke-missing; fi",
+      "assert": {
+        "contains": "cpu-capped-smoke"
+      },
+      "weight": 3
+    },
+    {
+      "id": "executor-rbac-grants-workflowtaskresults",
+      "describe": "the executor RBAC grants workflowtaskresults create/patch — the fix for the phase-Error-while-main-Completed wall, where the executor could not write results back (Deep Dive: reading a workflow's true status). Read from the rbac manifest the lab applies",
+      "run": "F=labs/m11/rbac-executor.yaml; if grep -q 'workflowtaskresults' \"$F\" && grep -q 'create' \"$F\" && grep -q 'patch' \"$F\" && grep -Eq 'kind: *Role' \"$F\" && grep -Eq 'kind: *RoleBinding' \"$F\"; then echo rbac-executor-ok; else echo rbac-executor-missing; fi",
+      "assert": {
+        "contains": "rbac-executor-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "break-glass-ladder-documented",
+      "describe": "the deep-dive documents the full break-glass ladder — kubectl dead, crictl DeadlineExceeded, pkill on the node — as the recovery path when the training pod starves the apiserver (Deep Dive: the starvation post-mortem). Read from the deep-dive page",
+      "run": "F=site/docs/m11-autoscaling-gitops/deep-dive.md; if grep -qi 'apiserver' \"$F\" && grep -qi 'crictl' \"$F\" && grep -qi 'pkill' \"$F\" && grep -qi 'DeadlineExceeded' \"$F\"; then echo ladder-documented; else echo ladder-missing; fi",
+      "assert": {
+        "contains": "ladder-documented"
+      },
+      "weight": 2
+    },
+    {
+      "id": "keda-internals-documented",
+      "describe": "the deep-dive dissects KEDA internals — the external-metrics API path, the generated HPA, and the paused-replicas / scale-to-zero knobs — beyond what the lab applied (Deep Dive: KEDA internals). Read from the deep-dive page",
+      "run": "F=site/docs/m11-autoscaling-gitops/deep-dive.md; if grep -q 'external.metrics.k8s.io' \"$F\" && grep -q 'keda-hpa-opsmate-model' \"$F\" && grep -q 'paused-replicas' \"$F\" && grep -qi 'cooldownPeriod' \"$F\"; then echo keda-internals-documented; else echo keda-internals-missing; fi",
+      "assert": {
+        "contains": "keda-internals-documented"
+      },
+      "weight": 2
+    },
+    {
+      "id": "phase-vs-containerstatuses-taught",
+      "describe": "the deep-dive teaches reading a workflow's true status from containerStatuses (the main container's real exit code) rather than trusting .status.phase, which lied while training succeeded (Deep Dive: phase vs containerStatuses). Read from the deep-dive page",
+      "run": "F=site/docs/m11-autoscaling-gitops/deep-dive.md; if grep -q 'containerStatuses' \"$F\" && grep -q 'status.phase' \"$F\" && grep -qi 'exit code' \"$F\"; then echo status-reading-taught; else echo status-reading-missing; fi",
+      "assert": {
+        "contains": "status-reading-taught"
+      },
+      "weight": 2
+    },
+    {
+      "id": "cpu-limit-is-control-plane-protection",
+      "describe": "the deep-dive frames the CPU limit as control-plane protection (requests = reservation, limits = the CFS-enforced ceiling that keeps the node governable), not pod hygiene (Deep Dive: requests vs limits). Read from the deep-dive page",
+      "run": "F=site/docs/m11-autoscaling-gitops/deep-dive.md; if grep -qi 'control-plane protection\\|control plane' \"$F\" && grep -qi 'CFS' \"$F\" && grep -qi 'reservation' \"$F\"; then echo control-plane-framing-ok; else echo control-plane-framing-missing; fi",
+      "assert": {
+        "contains": "control-plane-framing-ok"
+      },
+      "weight": 2
+    }
+  ]
+}

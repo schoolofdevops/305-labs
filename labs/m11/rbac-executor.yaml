@@ -1,0 +1,57 @@
+# =============================================================================
+# Argo Workflows executor RBAC — the permission the workflow pod needs to
+# report its own results back to the controller.
+#
+# THE SPIKE WALL (the phase-vs-containerStatuses lesson). The argo-workflows
+# chart installs the controller but grants the workflow's ServiceAccount NO
+# executor rights. The executor sidecar in each step pod writes a
+# `workflowtaskresults` object back to the API so the controller learns the
+# step's outcome. Without permission that write is FORBIDDEN:
+#
+#   Error (exit code 1): workflowtaskresults.argoproj.io is forbidden:
+#   User "system:serviceaccount:default:argo-workflow" cannot create resource
+#   "workflowtaskresults" in API group "argoproj.io"
+#
+# The trap: the MAIN container still runs and EXITS 0 — training actually
+# succeeds — but the workflow PHASE shows Error because the result never made it
+# back. You read `containerStatuses` (main: Completed, exit 0), not just
+# `.status.phase`, to see the truth. This manifest is the fix: an SA plus a Role
+# granting exactly the executor's `workflowtaskresults` create/patch. Apply it
+# BEFORE submitting the workflow.
+#
+# Apply:
+#   kubectl apply -f labs/m11/rbac-executor.yaml
+# =============================================================================
+---
+# The ServiceAccount the workflow pods run as (referenced by train-workflow.yaml).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argo-workflow
+  namespace: default
+---
+# The narrow permission the executor needs — nothing more. Least privilege: the
+# workflow pod can report task results, and cannot touch anything else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-workflow-executor
+  namespace: default
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflowtaskresults"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argo-workflow-executor
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argo-workflow-executor
+subjects:
+  - kind: ServiceAccount
+    name: argo-workflow
+    namespace: default

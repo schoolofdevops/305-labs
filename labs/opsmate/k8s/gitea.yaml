@@ -1,0 +1,115 @@
+# =============================================================================
+# Gitea — the in-cluster git server that holds OpsMate's ENVIRONMENT repo.
+#
+# GitOps needs a git remote that is desired-state truth. In production that is
+# GitHub/GitLab; for a self-contained lab we run a tiny gitea INSIDE the cluster
+# so the whole promote/rollback story works with no external account and no
+# network egress. One pod, sqlite backend, 256Mi — this is not a scalable git
+# host, it is a truthful one for teaching the reconcile loop.
+#
+# The repo `opsmate-env` that lives here holds the manifests Argo CD watches
+# (model-server.yaml + autoscale.yaml). Bumping the model's ModelKit tag in THIS
+# repo, via a PR, is how OpsMate gets promoted — git is the source of truth, the
+# cluster follows. Rollback is `git revert` in this same repo.
+#
+# Namespace `git` keeps the GitOps control plane (gitea + Argo CD live in their
+# own namespaces) visually separate from the workload namespace (default).
+# =============================================================================
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: git
+---
+# The PVC holds gitea's sqlite DB + the repo bare data. A PVC (not emptyDir) so a
+# pod restart does not wipe the opsmate-env repo you seeded — the promotion
+# history must survive a bounce, or a rollback has nothing to revert to.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitea-data
+  namespace: git
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea
+  namespace: git
+  labels:
+    app: gitea
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate           # single ReadWriteOnce PVC — one pod at a time
+  selector:
+    matchLabels:
+      app: gitea
+  template:
+    metadata:
+      labels:
+        app: gitea
+    spec:
+      containers:
+        - name: gitea
+          # Pinned tag — a moving `latest` would change gitea's API under the lab.
+          image: gitea/gitea:1.24.7
+          env:
+            # Install-lock + sqlite so the pod boots straight to a usable server
+            # with no web-installer step. These are the knobs that turn gitea from
+            # an interactive setup wizard into a headless, scriptable git remote.
+            - name: GITEA__database__DB_TYPE
+              value: "sqlite3"
+            - name: GITEA__server__ROOT_URL
+              value: "http://gitea.git.svc:3000/"
+            - name: GITEA__server__DISABLE_SSH
+              value: "true"          # HTTP-only; Argo clones over http in-cluster
+            - name: GITEA__security__INSTALL_LOCK
+              value: "true"          # skip the web installer — boot ready-to-use
+            - name: GITEA__service__DISABLE_REGISTRATION
+              value: "true"          # no open signup on a lab git host
+          ports:
+            - name: http
+              containerPort: 3000
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"       # sqlite single-user gitea fits easily
+              cpu: "1"
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30     # first boot initializes the DB — be patient
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: gitea-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea
+  namespace: git
+  labels:
+    app: gitea
+spec:
+  selector:
+    app: gitea
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+  type: ClusterIP              # in-cluster only; the lab reaches it via port-forward

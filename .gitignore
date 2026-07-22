@@ -1,2 +1,8 @@
 labs/m1/tokenizer.json
 *.gguf
+labs/opsmate/data/
+labs/opsmate/k8s/kubeconfig
+labs/m6/.llama.cpp/
+labs/opsmate/models/
+labs/opsmate/signing/
+labs/opsmate/train/

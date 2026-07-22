@@ -1,0 +1,91 @@
+# =============================================================================
+# opsmate-train — the fine-tune as a pipeline step (Argo Workflows).
+#
+# This is the training loop the course has run by hand since M6, now a governed
+# cluster job. Two guardrails make it safe to run on the SAME node that serves
+# OpsMate (the 8 GB path has one node):
+#
+#   1. CPU LIMIT (the circuit breaker). The spike proved an UNCAPPED training
+#      pod drives node CPU to ~247% and STARVES the kube-apiserver — TLS
+#      handshakes time out, `kubectl` stops working, and the only way back is
+#      pkill on the node. The `cpu: "2"` limit below keeps the control plane
+#      responsive. This limit is control-plane protection, not pod health. See
+#      the Deep Dive post-mortem.
+#
+#   2. ONE HEAVYWEIGHT AT A TIME. You DRAIN serving before submitting this:
+#        kubectl annotate scaledobject opsmate-model \
+#          autoscaling.keda.sh/paused-replicas="0" --overwrite
+#        kubectl scale deploy prometheus grafana phoenix --replicas=0
+#      (the lab walks these). KEDA's paused-replicas annotation doubles as the
+#      lever that parks serving at 0 replicas so the node's memory is free for
+#      the trainer. Un-pause after (paused-replicas="1").
+#
+# The base model arrives from the node's /models mount (kind extraMount in
+# kind-config.yaml). imagePullPolicy: Never because the image is `kind load`ed,
+# not pulled from a registry.
+#
+# Submit (after RBAC + drain):
+#   kubectl create -f labs/m11/train-workflow.yaml
+#   kubectl get wf -w
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: opsmate-train-      # each submit gets a unique name
+  labels:
+    app: opsmate-train
+spec:
+  entrypoint: finetune
+  # The controller schedules step pods under this ServiceAccount. The chart's
+  # default SA has no executor rights — rbac-executor.yaml grants the
+  # workflowtaskresults permission the executor sidecar needs to report results
+  # back (without it the PHASE shows Error while the main container exits 0 — the
+  # phase-vs-containerStatuses lesson in the Deep Dive).
+  serviceAccountName: argo-workflow
+  templates:
+    - name: finetune
+      container:
+        image: opsmate-train:m11
+        imagePullPolicy: Never       # kind-loaded, never pulled
+        # Argo's emissary executor cannot introspect a kind-loaded image's
+        # ENTRYPOINT (it would query the registry, which fails for a local-only
+        # image), so we state the command explicitly — it matches the image's
+        # ENTRYPOINT in Dockerfile.train.
+        command: ["python", "/work/train_lora.py"]
+        args:
+          # The SMOKE profile — the 8 GB path proves the pipeline runs, not a
+          # full fine-tune. batch 1 + max-len 256 keeps activation memory under
+          # the 4Gi limit (the spike OOMKilled at batch 2 / max-len 512); 2 steps
+          # is enough to show loss move. Full-fidelity training is the 16 GB /
+          # host path (M6), not this shared-node job.
+          - "--base"
+          - "/models/qwen3-0.6b"       # from the node's /models extraMount
+          - "--train"
+          - "/work/smoke-train.jsonl"  # baked into the image
+          - "--out-dir"
+          - "/work/out"
+          - "--batch"
+          - "1"
+          - "--max-len"
+          - "256"
+          - "--max-steps"
+          - "2"
+        resources:
+          requests:
+            cpu: "1"
+            memory: 2Gi
+          limits:
+            cpu: "2"                   # THE circuit breaker — see the header
+            memory: 4Gi                # fp32 weight load + step activations fit here
+        volumeMounts:
+          - name: base-model
+            mountPath: /models
+            readOnly: true
+      volumes:
+        # The base weights, straight from the node filesystem (kind extraMount).
+        # hostPath, not a PVC: the model is read-only reference data the node
+        # already carries; no need to copy it into cluster storage per run.
+        - name: base-model
+          hostPath:
+            path: /models
+            type: Directory

@@ -1,0 +1,56 @@
+# =============================================================================
+# M11 — Autoscaling the OpsMate model server on a signal that MEANS something.
+#
+# CPU% is the wrong signal for an LLM server. llama.cpp decode saturates ONE
+# core per in-flight request, so a single busy request already looks like "one
+# core pinned" — long before the box is actually overloaded. Worse, a request
+# that is QUEUED (waiting for a slot) consumes ~0 CPU while the user waits: the
+# pain is real and CPU% is flat. Averaging that into an HPA on CPU% gives you an
+# autoscaler that never fires when it should and thrashes when it shouldn't.
+#
+# The signal that maps to user pain is QUEUE DEPTH. llama-server exports it as
+# `llamacpp:requests_deferred` — requests parked because every slot is busy.
+# Prometheus already scrapes it (M10). This is the exact gauge you learned to
+# read on the Grafana wall; here it becomes the input to a control loop.
+#
+# KEDA turns that Prometheus series into a Kubernetes external metric and
+# GENERATES an HPA for us — no prometheus-adapter rule language. After you apply
+# this, look at BOTH objects:
+#     kubectl get scaledobject          # this file
+#     kubectl get hpa                   # keda-hpa-opsmate-model, KEDA made it
+# The HPA is a real v2 HPA; KEDA owns it. Editing it by hand fights the operator.
+# =============================================================================
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: opsmate-model
+spec:
+  scaleTargetRef:
+    name: opsmate-model            # the M8 serving Deployment, unchanged
+  minReplicaCount: 1               # Keep 1 warm. Scale-to-zero (idleReplicaCount: 0)
+  maxReplicaCount: 2               # exists, but a model cold start = image pull +
+                                   # MODEL LOAD (minutes), not the seconds a stateless
+                                   # web pod takes. Right for a rare/batch endpoint;
+                                   # wrong for an interactive service. Deep Dive covers
+                                   # the 0<->1 transition knobs below.
+  pollingInterval: 10             # how often KEDA queries Prometheus (seconds). KEDA
+  cooldownPeriod: 60              # will warn these are irrelevant at minReplicaCount>=1
+                                  # — they only govern the scale-to-zero (0<->1) path.
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          # Don't yank the second replica the instant the queue drains — a brief
+          # lull during a burst would flap 2->1->2. Hold for 60s of calm first.
+          stabilizationWindowSeconds: 60
+  triggers:
+    - type: prometheus
+      metadata:
+        # The M10 slim Prometheus, by its in-cluster Service DNS name. KEDA reads
+        # it directly — the same series the Grafana wall graphs.
+        serverAddress: http://prometheus.default.svc:9090
+        query: sum(llamacpp:requests_deferred)
+        threshold: "2"            # >2 parked requests (summed across replicas) per
+                                  # replica -> add a replica. Under the M3 load shape
+                                  # the deferred gauge climbs well past 2, so the HPA
+                                  # reads e.g. 12/2 and scales 1->2.

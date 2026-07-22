@@ -1,0 +1,112 @@
+{
+  "checks": [
+    {
+      "id": "kind-config-base-model-mount",
+      "describe": "kind-config.yaml grew the base-model extraMount so the training pod can read the base weights off the node (Step 1). The node mounts ./models -> /models read-only",
+      "run": "F=labs/opsmate/k8s/kind-config.yaml; if grep -q 'extraMounts:' \"$F\" && grep -q 'containerPath: /models' \"$F\" && grep -q 'hostPath: ./models' \"$F\"; then echo mount-present; else echo mount-absent; fi",
+      "assert": {
+        "contains": "mount-present"
+      },
+      "weight": 2
+    },
+    {
+      "id": "kind-cluster-node-ready",
+      "describe": "the slim KIND cluster is up (recreated this module with the base-model mount) and its node reports Ready via the isolated kubeconfig (Step 1). Self-seeds with make k8s-up if absent",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; kubectl get nodes 2>/dev/null | grep -c ' Ready ' | xargs -I{} sh -c 'if [ {} -ge 1 ]; then echo node-ready; else echo node-not-ready; fi'",
+      "assert": {
+        "contains": "node-ready"
+      },
+      "weight": 2
+    },
+    {
+      "id": "base-model-on-node",
+      "describe": "the base Qwen3-0.6B weights are visible on the node via the extraMount — the training workflow reads them from /models (Step 1). Self-seeds the cluster; checks the mounted safetensors",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; if docker exec opsmate-control-plane ls /models/qwen3-0.6b/model.safetensors >/dev/null 2>&1; then echo base-mounted; else echo base-missing; fi",
+      "assert": {
+        "contains": "base-mounted"
+      },
+      "weight": 2
+    },
+    {
+      "id": "autoscale-queue-depth-signal",
+      "describe": "autoscale.yaml scales the model server on QUEUE DEPTH, not CPU%: a KEDA ScaledObject with a prometheus trigger on sum(llamacpp:requests_deferred), min 1 / max 2 (Step 2)",
+      "run": "F=labs/opsmate/k8s/autoscale.yaml; if grep -q 'kind: ScaledObject' \"$F\" && grep -q 'type: prometheus' \"$F\" && grep -q 'llamacpp:requests_deferred' \"$F\" && grep -q 'minReplicaCount: 1' \"$F\" && grep -q 'maxReplicaCount: 2' \"$F\"; then echo signal-queue-depth; else echo signal-wrong; fi",
+      "assert": {
+        "contains": "signal-queue-depth"
+      },
+      "weight": 3
+    },
+    {
+      "id": "keda-generates-hpa",
+      "describe": "KEDA is installed and, from the applied ScaledObject, GENERATES the HPA keda-hpa-opsmate-model targeting the model Deployment min 1 / max 2 (Step 2). Self-seeds: cluster up, model server applied, KEDA helm-installed, ScaledObject applied, then reads the generated HPA",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; bash labs/m7/seed.sh >/dev/null 2>&1 || true; HIP=$(docker exec opsmate-control-plane getent hosts host.docker.internal 2>/dev/null | awk '{print $1}'); HIP=${HIP:-127.0.0.1}; sed \"s#ip: \\\"127.0.0.1\\\"#ip: \\\"$HIP\\\"#\" labs/opsmate/k8s/model-server.yaml | kubectl apply -f - >/dev/null 2>&1; kubectl apply -f labs/opsmate/k8s/observability.yaml >/dev/null 2>&1; helm repo add kedacore https://kedacore.github.io/charts >/dev/null 2>&1 || true; helm repo update kedacore >/dev/null 2>&1; helm status keda -n keda >/dev/null 2>&1 || helm install keda kedacore/keda -n keda --create-namespace --set resources.operator.limits.memory=200Mi --set resources.metricServer.limits.memory=200Mi --set resources.webhooks.limits.memory=100Mi >/dev/null 2>&1; kubectl -n keda rollout status deployment keda-operator --timeout=180s >/dev/null 2>&1; kubectl apply -f labs/opsmate/k8s/autoscale.yaml >/dev/null 2>&1; sleep 15; if kubectl get hpa keda-hpa-opsmate-model >/dev/null 2>&1; then echo hpa-generated; else echo hpa-missing; fi",
+      "assert": {
+        "contains": "hpa-generated"
+      },
+      "weight": 3
+    },
+    {
+      "id": "argocd-values-slim-correct-keys",
+      "describe": "argocd-values.yaml is the slim values: dex + notifications disabled, ApplicationSet controller disabled with the CORRECT key (applicationSet.replicas: 0, not the no-op enabled: false), and memory limits on the kept components (Step 4)",
+      "run": "F=labs/opsmate/k8s/argocd-values.yaml; if grep -Pzoq '(?s)dex:\\s*\\n\\s*enabled: false' \"$F\" 2>/dev/null; then DEX=1; else DEX=$(awk '/^dex:/{f=1} f&&/enabled: false/{print \"ok\"; exit}' \"$F\" | grep -c ok); fi; AS=$(awk '/^applicationSet:/{f=1} f&&/replicas: 0/{print \"ok\"; exit}' \"$F\" | grep -c ok); NO=$(awk '/^notifications:/{f=1} f&&/enabled: false/{print \"ok\"; exit}' \"$F\" | grep -c ok); MEM=$(grep -c 'memory:' \"$F\"); if [ \"${DEX:-0}\" -ge 1 ] && [ \"$AS\" -ge 1 ] && [ \"$NO\" -ge 1 ] && [ \"$MEM\" -ge 4 ]; then echo values-slim-correct; else echo values-wrong:dex${DEX}-as${AS}-no${NO}-mem${MEM}; fi",
+      "assert": {
+        "contains": "values-slim-correct"
+      },
+      "weight": 2
+    },
+    {
+      "id": "gitea-manifest-env-repo-host",
+      "describe": "gitea.yaml stands up the in-cluster environment-repo host: a Deployment + Service in namespace git, sqlite backend, install-lock so it boots headless, memory-capped (Step 4)",
+      "run": "F=labs/opsmate/k8s/gitea.yaml; if grep -q 'namespace: git' \"$F\" && grep -q 'app: gitea' \"$F\" && grep -q 'sqlite3' \"$F\" && grep -q 'INSTALL_LOCK' \"$F\" && grep -Eq 'memory: \"?256Mi' \"$F\"; then echo gitea-env-host; else echo gitea-wrong; fi",
+      "assert": {
+        "contains": "gitea-env-host"
+      },
+      "weight": 2
+    },
+    {
+      "id": "train-workflow-cpu-capped-smoke",
+      "describe": "train-workflow.yaml runs the fine-tune as a governed step: an Argo Workflow with a CPU LIMIT (the circuit breaker), the 8 GB smoke profile flags (--batch 1 --max-len 256 --max-steps 2), imagePullPolicy Never, and the base model mounted from the node (Step 9)",
+      "run": "F=labs/m11/train-workflow.yaml; if awk '/limits:/{f=1} f&&/cpu:/{print \"cap\"; exit}' \"$F\" | grep -q cap; then CAP=cap; else CAP=nocap; fi; if grep -q 'kind: Workflow' \"$F\" && [ \"$CAP\" = cap ] && grep -q -- '--max-steps' \"$F\" && grep -q -- '--batch' \"$F\" && grep -q '256' \"$F\" && grep -q 'imagePullPolicy: Never' \"$F\"; then echo train-capped-smoke; else echo train-wrong:$CAP; fi",
+      "assert": {
+        "contains": "train-capped-smoke"
+      },
+      "weight": 3
+    },
+    {
+      "id": "executor-rbac-workflowtaskresults",
+      "describe": "rbac-executor.yaml grants the workflow SA exactly the executor permission the phase-vs-containerStatuses lesson needs: workflowtaskresults create + patch, via a ServiceAccount + Role + RoleBinding (Step 9 / Deep Dive)",
+      "run": "F=labs/m11/rbac-executor.yaml; if grep -q 'kind: ServiceAccount' \"$F\" && grep -q 'kind: Role' \"$F\" && grep -q 'kind: RoleBinding' \"$F\" && grep -q 'workflowtaskresults' \"$F\" && grep -q 'create' \"$F\" && grep -q 'patch' \"$F\"; then echo rbac-executor-ok; else echo rbac-executor-missing; fi",
+      "assert": {
+        "contains": "rbac-executor-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "train-image-builds-and-loads",
+      "describe": "the training image is prebuilt (deps baked, not pip-at-pod-start) and kind-loadable — the Dockerfile pins the trainer env, copies the M6 train_lora.py and a smoke dataset, and entrypoints the trainer (Step 9). Self-seeds: builds the image and loads it into the node",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get nodes >/dev/null 2>&1 || make -C labs/opsmate k8s-up >/dev/null 2>&1; test -f labs/m11/train_lora.py && test -f labs/m11/smoke-train.jsonl || { echo train-assets-missing; exit 0; }; docker build -f labs/m11/Dockerfile.train -t opsmate-train:m11 labs/m11 >/dev/null 2>&1 && kind load docker-image opsmate-train:m11 --name opsmate >/dev/null 2>&1; if docker exec opsmate-control-plane crictl images 2>/dev/null | grep -q 'opsmate-train'; then echo train-image-loaded; else docker image inspect opsmate-train:m11 >/dev/null 2>&1 && echo train-image-built || echo train-image-failed; fi",
+      "assert": {
+        "contains": "train-image"
+      },
+      "weight": 2
+    },
+    {
+      "id": "smoke-dataset-schema-valid",
+      "describe": "the baked smoke dataset matches the trainer's expected schema (messages[] + source per row) so the in-cluster smoke fine-tune runs without a data mount (Step 9)",
+      "run": "python3 -c \"import json; rows=[json.loads(l) for l in open('labs/m11/smoke-train.jsonl') if l.strip()]; ok=all('messages' in r and 'source' in r and isinstance(r['messages'],list) for r in rows); print('smoke-schema-ok' if (ok and len(rows)>=4) else 'smoke-schema-bad')\"",
+      "assert": {
+        "contains": "smoke-schema-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "lab-teaches-git-only-changes",
+      "describe": "the lab makes the model version a fact in git: it promotes via a PR (tag bump merged), hits the two designed exhibits (presence-cache lie + per-kit filename), fixes both THROUGH git, and rolls back with git revert -m 1 (Steps 6-8)",
+      "run": "F=site/docs/m11-autoscaling-gitops/lab.md; if grep -q 'presence-cache' \"$F\" && grep -q 'per-tag' \"$F\" && grep -q 'opsmate-tuned-q8_0.gguf' \"$F\" && grep -q 'git revert' \"$F\" && grep -q -- '-m 1' \"$F\"; then echo gitops-arc-taught; else echo gitops-arc-incomplete; fi",
+      "assert": {
+        "contains": "gitops-arc-taught"
+      },
+      "weight": 2
+    }
+  ]
+}

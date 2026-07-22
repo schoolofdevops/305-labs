@@ -4,6 +4,24 @@ apiVersion: kind.x-k8s.io/v1alpha4
 name: opsmate
 nodes:
   - role: control-plane
+    # --- M11: the base model, mounted into the node ---------------------------
+    # The M11 training workflow fine-tunes the base Qwen3-0.6B *inside* the
+    # cluster, so the training pod needs the base weights on the node's
+    # filesystem. Rather than copy 1.4 GB into an image or `docker cp` it in per
+    # run, we bind-mount the host's models dir into the node. extraMounts are
+    # read at cluster-create, which is why M11 recreates the cluster at module
+    # start (`make k8s-up` after a teardown) — the mount cannot be added to a
+    # running node. The training pod then mounts a hostPath at /models/base
+    # (train-workflow.yaml) and reads the weights read-only. Zero copies.
+    #
+    # hostPath is relative to where `kind create cluster` runs — the Makefile
+    # invokes it from labs/opsmate/, so ./models is that dir's models/ (the base
+    # Qwen3-0.6B safetensors live at models/qwen3-0.6b/). If you ever create the
+    # cluster by hand from the repo root, make this ./labs/opsmate/models.
+    extraMounts:
+      - hostPath: ./models
+        containerPath: /models
+        readOnly: true
 containerdConfigPatches:
   # Reach the course's local Zot registry (M7) from inside the cluster.
   # host.docker.internal resolves from the kind node container on Docker Desktop;

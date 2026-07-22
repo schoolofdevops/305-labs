@@ -1,0 +1,77 @@
+# =============================================================================
+# Argo CD — slim, 8 GB-path Helm values for the OpsMate GitOps control plane.
+#
+# The default argo-cd chart installs a full platform: SSO (dex), a notifications
+# controller, an ApplicationSet controller, and generously-sized components. On
+# the 8 GB path that stack competes with the serving + observability workload for
+# memory we don't have. This values file trims Argo CD to the parts the M11 lab
+# actually uses — reconcile the opsmate-env repo onto the cluster — and caps each
+# component's memory so the whole control plane fits alongside OpsMate.
+#
+# Install with:
+#   helm install argocd argo/argo-cd -n argocd --create-namespace \
+#     -f labs/opsmate/k8s/argocd-values.yaml
+#
+# After it is up, `kubectl -n argocd get pods` should show application-controller,
+# repo-server, server, and redis — and NOT dex, notifications, or applicationset.
+# =============================================================================
+
+# --- SSO off -----------------------------------------------------------------
+# Dex is Argo CD's bundled SSO/OIDC broker. The lab logs in with the built-in
+# admin account (initial password from the argocd-initial-admin-secret), so we
+# never need dex — turning it off removes a pod. This key IS a real toggle.
+dex:
+  enabled: false
+
+# --- Notifications off --------------------------------------------------------
+# The notifications controller sends Slack/email/webhook alerts on sync events.
+# The lab reads sync state with `kubectl` and the argocd CLI, so this controller
+# is pure overhead here. Also a real toggle.
+notifications:
+  enabled: false
+
+# --- ApplicationSet controller off (the spike gotcha) -------------------------
+# WATCH OUT: this chart has NO `applicationSet.enabled` key. In the spike,
+# `--set applicationSet.enabled=false` set a field that does not exist (a silent
+# no-op) and the applicationset-controller pod came up anyway. The CORRECT
+# off-switch in this chart version is to run ZERO replicas of it. The
+# ApplicationSet controller templates many Applications from generators; the lab
+# creates ONE Application by hand, so we don't need it.
+applicationSet:
+  replicas: 0
+
+# --- Memory caps on the components we keep ------------------------------------
+# Shapes measured in the M11 spike — enough for a single small env repo, small
+# enough to fit the 8 GB path. request = scheduler reservation; limit = the hard
+# ceiling. These are lab sizes, not production sizing.
+controller:                 # the application-controller: does the reconcile loop
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 300Mi
+
+repoServer:                 # clones the git repo, renders manifests
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 200Mi
+
+server:                     # the API + web UI
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 200Mi
+
+redis:                      # Argo CD's cache
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 100Mi
