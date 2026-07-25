@@ -1,0 +1,58 @@
+{
+  "checks": [
+    {
+      "id": "deep-dive-loop-is-action-space",
+      "describe": "the Deep Dive explains loops at the mechanism level: the tool schemas in the request DEFINE the model's action space, so calling a tool stays legal until the orchestrator removes it — termination is the orchestrator's job (omit tools / step budget), not the model's",
+      "run": "F=site/docs/m13-agentic-capstone/deep-dive.md; if grep -qi 'action space' \"$F\" && grep -qi 'orchestrator' \"$F\" && grep -qi 'step budget' \"$F\" && grep -qi 'termination' \"$F\"; then echo loop-mechanism-ok; else echo loop-mechanism-incomplete; fi",
+      "assert": {
+        "contains": "loop-mechanism-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "deep-dive-dropped-knob-family",
+      "describe": "the Deep Dive documents the dropped-knob translation family (forwarded vs errored vs silently dropped) across M2 (think:false), M12 (prompt_injection_params without callback), and M13 (tool_choice:none) — the through-line being 'a parameter is a request, not a guarantee; verify behavior, not configuration'",
+      "run": "F=site/docs/m13-agentic-capstone/deep-dive.md; if grep -qi 'silently drop' \"$F\" && grep -q 'tool_choice' \"$F\" && grep -q 'think' \"$F\" && grep -q 'prompt_injection_params' \"$F\" && grep -qi 'verify behavior' \"$F\"; then echo dropped-knob-ok; else echo dropped-knob-incomplete; fi",
+      "assert": {
+        "contains": "dropped-knob-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "deep-dive-constrained-decoding",
+      "describe": "the Deep Dive explains how a schema BINDS generation (constrained decoding: mask illegal next-tokens to zero, renormalize, sample only from legal tokens — the guarantee is structural, not statistical) and distinguishes it from best-effort prompt-plus-retry structured output",
+      "run": "F=site/docs/m13-agentic-capstone/deep-dive.md; if grep -qi 'constrained decoding' \"$F\" && grep -qi 'mask' \"$F\" && grep -qi 'structural' \"$F\" && grep -qi 'retry' \"$F\"; then echo constrained-ok; else echo constrained-incomplete; fi",
+      "assert": {
+        "contains": "constrained-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "deep-dive-agent-evals-and-sandboxing",
+      "describe": "the Deep Dive names the 303 frontier honestly: agent evals grade TRAJECTORIES (the path of decisions) not just answers, and sandboxing is what read-only bought for free (capability by absence) — needed the moment tools can mutate the world",
+      "run": "F=site/docs/m13-agentic-capstone/deep-dive.md; if grep -qi 'trajector' \"$F\" && grep -qi 'sandbox' \"$F\" && grep -qi 'read-only' \"$F\" && grep -qi 'mutate' \"$F\"; then echo frontier-ok; else echo frontier-incomplete; fi",
+      "assert": {
+        "contains": "frontier-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "deep-dive-capstone-ops-notes",
+      "describe": "the Deep Dive carries capstone ops notes for scale: the synthesize->tune->gate loop as a data pipeline (idempotency, lineage, an ENFORCED contamination guard), the gate floor as a governed/version-controlled baseline (never lowered quietly), and the wall-clock hidden by the smoke profile",
+      "run": "F=site/docs/m13-agentic-capstone/deep-dive.md; if grep -qi 'contamination' \"$F\" && grep -qi 'lineage' \"$F\" && grep -qi 'floor' \"$F\" && grep -qi 'smoke' \"$F\"; then echo ops-notes-ok; else echo ops-notes-incomplete; fi",
+      "assert": {
+        "contains": "ops-notes-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "deep-dive-mermaid-present",
+      "describe": "the Deep Dive carries at least one Mermaid diagram (the loop-vs-fix action space, the dropped-knob translation outcomes, or the constrained-decoding token loop) per the diagram-required convention",
+      "run": "F=site/docs/m13-agentic-capstone/deep-dive.md; if grep -q '```mermaid' \"$F\"; then echo deepdive-mermaid-ok; else echo deepdive-mermaid-missing; fi",
+      "assert": {
+        "contains": "deepdive-mermaid-ok"
+      },
+      "weight": 1
+    }
+  ]
+}

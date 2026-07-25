@@ -1,0 +1,85 @@
+{
+  "checks": [
+    {
+      "id": "mcp-server-readonly-stdio-protocol",
+      "describe": "the MCP server (labs/opsmate/mcp/mcp_k8s.py) is a stdio JSON-RPC 2.0 server implementing initialize/tools/list/tools/call with exactly two READ-ONLY tools (get_pod_status, get_pod_logs) — and NO mutating verb (create/delete/patch/scale/apply) exists in it at all (the visitor-badge discipline as tool design) (Lab Step 3)",
+      "run": "F=labs/opsmate/mcp/mcp_k8s.py; if python3 -c \"import ast,sys; ast.parse(open('$F').read())\" 2>/dev/null && grep -q 'initialize' \"$F\" && grep -q 'tools/list' \"$F\" && grep -q 'tools/call' \"$F\" && grep -q 'get_pod_status' \"$F\" && grep -q 'get_pod_logs' \"$F\" && grep -q 'jsonrpc' \"$F\" && ! grep -Eq 'kubectl[^)]*(delete|create|patch|scale|apply|edit)|\"(delete|create|patch|scale|apply|edit)\"' \"$F\"; then echo mcp-readonly-ok; else echo mcp-readonly-wrong; fi",
+      "assert": {
+        "contains": "mcp-readonly-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "agent-omits-tools-on-answer-turn",
+      "describe": "agent.py is the teaching artifact: it spawns the MCP server, converts MCP schemas to OpenAI tool schemas (name/description/inputSchema -> parameters — the USB-C beat), offers tools on turn 1, executes tool calls via MCP, and OMITS tools on the answer turn (the loop fix — the load-bearing single line). It also carries a system nudge to gather both status and logs (Lab Steps 4-7)",
+      "run": "F=labs/m13/agent.py; if python3 -c \"import ast; ast.parse(open('$F').read())\" 2>/dev/null && grep -q 'mcp_k8s.py' \"$F\" && grep -q '\"parameters\": t\\[\"inputSchema\"\\]' \"$F\" && grep -q '\"tools\": tools' \"$F\" && grep -q 'chat({\"messages\": msgs, \"think\": False, \"max_tokens\": 1200})' \"$F\" && grep -qi 'omit' \"$F\" && grep -qi 'gather BOTH' \"$F\"; then echo agent-loop-fix-ok; else echo agent-loop-fix-wrong; fi",
+      "assert": {
+        "contains": "agent-loop-fix-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "crashloop-subject-manifest",
+      "describe": "crashloop.yaml is the DESIGNED subject: namespace shop + a busybox payments-api Deployment that logs the FATAL db-connection line and exits 1 (the diagnosable crashloop the agent reads back). No model server — the cluster is the subject, not the server (Lab Step 2)",
+      "run": "F=labs/m13/crashloop.yaml; if python3 -c \"import yaml; list(yaml.safe_load_all(open('$F')))\" 2>/dev/null && grep -q 'namespace: shop' \"$F\" && grep -q 'payments-api' \"$F\" && grep -q 'FATAL' \"$F\" && grep -q 'busybox' \"$F\" && grep -q 'exit 1' \"$F\"; then echo crashloop-ok; else echo crashloop-wrong; fi",
+      "assert": {
+        "contains": "crashloop-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "agent-cluster-up-with-crashloop",
+      "describe": "the slim Part-A cluster (opsmate-agent, one bare node) is up via the isolated kubeconfig and the crashloop pod is applied and crashing — the live state the MCP server inspects. Self-seeds: creates the bare cluster and applies crashloop.yaml if absent (Lab Steps 1-2)",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kind get clusters 2>/dev/null | grep -qx opsmate-agent || kind create cluster --name opsmate-agent --kubeconfig labs/opsmate/k8s/kubeconfig >/dev/null 2>&1; kubectl wait --for=condition=Ready nodes --all --timeout=120s >/dev/null 2>&1; kubectl get ns shop >/dev/null 2>&1 || kubectl apply -f labs/m13/crashloop.yaml >/dev/null 2>&1; sleep 25; if kubectl -n shop get pods 2>/dev/null | grep -q payments-api; then echo crashloop-live; else echo crashloop-not-live; fi",
+      "assert": {
+        "contains": "crashloop-live"
+      },
+      "weight": 2
+    },
+    {
+      "id": "mcp-protocol-drives-live-cluster",
+      "describe": "the MCP server, driven by hand (printf JSON-RPC lines | mcp_k8s.py), returns serverInfo on initialize, a 2-tool list on tools/list, and the REAL pod row on tools/call against the live crashloop — proving the read-only inspector works end to end vs the isolated kubeconfig (Lab Step 3)",
+      "run": "export KUBECONFIG=labs/opsmate/k8s/kubeconfig; kubectl get ns shop >/dev/null 2>&1 || { echo mcp-no-cluster; exit 0; }; OUT=$(printf '%s\\n' '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}' '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}' '{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"get_pod_status\",\"arguments\":{\"namespace\":\"shop\",\"pod\":\"payments-api\"}}}' | python3 labs/opsmate/mcp/mcp_k8s.py 2>/dev/null); if echo \"$OUT\" | grep -q 'opsmate-k8s-inspector' && echo \"$OUT\" | grep -q 'get_pod_status' && echo \"$OUT\" | grep -q 'payments-api'; then echo mcp-live-ok; else echo mcp-live-wrong; fi",
+      "assert": {
+        "contains": "mcp-live-ok"
+      },
+      "weight": 3
+    },
+    {
+      "id": "lab-teaches-agent-arc-and-three-exhibits",
+      "describe": "the lab teaches the full agentic arc: drive MCP by hand, run the agent (decide -> execute -> ground), EXHIBIT A (the loop — tools left in, spend rows accumulate), EXHIBIT B (tool_choice:none silently dropped), the omit-tools fix, arg hygiene, and the Spend + K8s lens moment — then Part B the capstone and a FULL teardown (Lab Steps 3-16)",
+      "run": "F=site/docs/m13-agentic-capstone/lab.md; if grep -q 'get_pod_status' \"$F\" && grep -qi 'EXHIBIT A' \"$F\" && grep -qi 'EXHIBIT B' \"$F\" && grep -q 'tool_choice' \"$F\" && grep -qi 'omit the tools' \"$F\" && grep -qi 'arg hygiene' \"$F\" && grep -qi 'Spend lens' \"$F\" && grep -q '1.2.0' \"$F\" && grep -qi 'gate.sh' \"$F\" && grep -qi 'portfolio' \"$F\" && grep -qi 'teardown' \"$F\"; then echo lab-arc-ok; else echo lab-arc-incomplete; fi",
+      "assert": {
+        "contains": "lab-arc-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "capstone-runbook-and-portfolio-skeleton",
+      "describe": "the capstone assets exist: the new cache-eviction runbook (the v1.2 training signal) and the portfolio skeleton (README with the 5-row rubric, MODELKIT.md by digest, an eval-report template, and dirs for manifests/dashboards/ci/eval-report) the learner fills and publishes (Lab Steps 10, 15)",
+      "run": "R=labs/m13/cache-eviction.md; P=labs/m13/portfolio; if grep -qi 'eviction' \"$R\" && grep -qi 'redis' \"$R\" && test -f \"$P/README.md\" && grep -qi 'rubric' \"$P/README.md\" && test -f \"$P/MODELKIT.md\" && grep -qi 'digest' \"$P/MODELKIT.md\" && test -d \"$P/manifests\" && test -d \"$P/dashboards\" && test -d \"$P/ci\" && test -d \"$P/eval-report\"; then echo portfolio-ok; else echo portfolio-wrong; fi",
+      "assert": {
+        "contains": "portfolio-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "lesson-progression-and-course-wrap",
+      "describe": "the lesson places the progression (naive RAG -> agentic RAG -> tool-using -> multi-agent), teaches structured outputs as the reliability primitive FIRST, tool-calling ops implications (latency/loops/cost), MCP in 30 min (USB-C), the guarded agent (read-only + spend), the capstone narrative, and the course wrap with the 303-agentops hand-off — with >=2 Mermaid diagrams (Lesson)",
+      "run": "F=site/docs/m13-agentic-capstone/lesson.md; M=$(grep -c '```mermaid' \"$F\"); if grep -qi 'naive RAG' \"$F\" && grep -qi 'agentic RAG' \"$F\" && grep -qi 'multi-agent' \"$F\" && grep -qi 'reliability primitive' \"$F\" && grep -qi 'USB-C' \"$F\" && grep -qi 'visitor badge' \"$F\" && grep -qi '303-agentops' \"$F\" && [ \"$M\" -ge 2 ]; then echo lesson-ok; else echo lesson-incomplete; fi",
+      "assert": {
+        "contains": "lesson-ok"
+      },
+      "weight": 2
+    },
+    {
+      "id": "lab-folds-real-output-no-html-comments",
+      "describe": "after live validation the lab has real Expected-output folded in (fenced ```text blocks) and carries no HTML comments (which break the MDX build) and no leftover CAPTURE placeholders (course convention: fold real output, then remove the {/* CAPTURE */} markers)",
+      "run": "F=site/docs/m13-agentic-capstone/lab.md; if grep -q '```text' \"$F\" && ! grep -q '<!--' \"$F\" && ! grep -q 'CAPTURE' \"$F\"; then echo lab-folded-ok; else echo lab-folded-wrong; fi",
+      "assert": {
+        "contains": "lab-folded-ok"
+      },
+      "weight": 1
+    }
+  ]
+}

@@ -49,10 +49,14 @@ services:
   # Presidio = the PII scanner behind the guardrail. analyzer FINDS entities
   # (names, emails, phones); anonymizer REWRITES them to <PERSON> etc. Multi-arch
   # images, so no build. analyzer loads a spaCy model — it is the heavy one
-  # (~738 MiB @ 1.5g); anonymizer is a thin rewriter (~thin, 256m fine).
+  # (~738 MiB @ 1.5g); anonymizer is a thin rewriter. It ran fine at 256m in the
+  # M12 compose-only phase, but in M13 Part A (the tightest co-residency in the
+  # course — gateway + a KIND cluster + a churning crashloop pod at once) 256m
+  # gets OOM-killed (Exited 137); with the guardrail default_on, a dead anonymizer
+  # then 500s every request. 512m survives the co-resident phase with room to spare.
   analyzer:
     image: mcr.microsoft.com/presidio-analyzer:latest
     mem_limit: 1500m
   anonymizer:
     image: mcr.microsoft.com/presidio-anonymizer:latest
-    mem_limit: 256m
+    mem_limit: 512m

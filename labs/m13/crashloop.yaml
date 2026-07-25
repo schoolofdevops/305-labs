@@ -1,0 +1,54 @@
+# ============================================================================
+# M13 — the crashloop SUBJECT the agent diagnoses.
+#
+# This is NOT a model server. The cluster in the agentic lab is the THING being
+# inspected, not the thing serving OpsMate (chat stays on host Ollama through
+# the M12 gateway). So the cluster only needs one deliberately-broken workload:
+# a pod that crashloops with a realistic, diagnosable cause.
+#
+# The workload is a busybox pod pretending to be "payments-api". On start it
+# prints a FATAL line naming a database it cannot reach, then exits 1. The
+# kubelet restarts it, it fails the same way, and after a few rounds it lands in
+# CrashLoopBackOff with a climbing restart count and a `terminated exit 1` last
+# state — exactly the shape the MCP inspector reads back and the model diagnoses.
+#
+# Nothing here mutates anything the agent can touch: the MCP server is read-only
+# (get pods / get logs), so this manifest is safe to apply and the agent can
+# only OBSERVE it. Apply it with the isolated kubeconfig (see the lab).
+# ============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-api
+  namespace: shop
+  labels: { app: payments-api }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: payments-api }
+  template:
+    metadata:
+      labels: { app: payments-api }
+    spec:
+      containers:
+        - name: payments-api
+          image: busybox:1.36
+          # The realistic failure: the service can't reach its database on boot,
+          # logs a FATAL line that NAMES the dependency and port, then exits
+          # non-zero. A human on call would read that one line and know the fix
+          # is "the db isn't reachable" — which is exactly the grounded answer we
+          # want the agent to reach from the same log line, not from guessing.
+          command: ["/bin/sh", "-c"]
+          args:
+            - >
+              echo "starting payments-api...";
+              echo "FATAL: failed to connect to db payments-db:5432: connection refused";
+              exit 1
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "32Mi" }
